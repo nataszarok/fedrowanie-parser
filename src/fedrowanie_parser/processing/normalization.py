@@ -92,9 +92,11 @@ except ImportError:
 from ..models import SalaryRow
 
 def norm_space(s: str) -> str:
+    """Normalize whitespace and non-breaking spaces in source text."""
     return re.sub('\\s+', ' ', (s or '').replace('\xa0', ' ')).strip(' |\t\r\n')
 
 def parse_money(token: str) -> Optional[float]:
+    """Parse a Polish-formatted monetary value into a float."""
     if not token:
         return None
     s = token.lower().replace('zł', '').replace('pln', '').replace('\xa0', ' ').strip()
@@ -115,6 +117,7 @@ def parse_money(token: str) -> Optional[float]:
     return value
 
 def money_cells(text: str) -> list[tuple[str, float]]:
+    """Return table cells that contain parseable monetary values."""
     out = []
     for m in MONEY_TOKEN.finditer(text or ''):
         tok = m.group(0)
@@ -124,9 +127,11 @@ def money_cells(text: str) -> list[tuple[str, float]]:
     return out
 
 def money_values(text: str) -> list[float]:
+    """Extract all monetary values from a text fragment."""
     return [val for _, val in money_cells(text)]
 
 def is_metadata_or_date(line: str) -> bool:
+    """Return whether text looks like metadata or a date rather than a record."""
     l = norm_space(line)
     if DATE_RE.search(l) or ISO_DATE_RE.search(l):
         return True
@@ -137,10 +142,12 @@ def is_metadata_or_date(line: str) -> bool:
     return False
 
 def mentions_other_year(line: str) -> bool:
+    """Return whether text explicitly refers to a year other than the target year."""
     years = {int(x) for x in YEAR_OTHER_RE.findall(line or '')}
     return bool(years and YEAR not in years)
 
 def is_summary_row(line: str) -> bool:
+    """Return whether a row appears to be a summary or total."""
     l = norm_space(line)
     if not SUMMARY_RE.search(l):
         return False
@@ -151,6 +158,7 @@ def is_summary_row(line: str) -> bool:
     return True
 
 def detect_contract(text: str, fallback: str='') -> str:
+    """Infer contract type from a text fragment when explicitly stated."""
     t = text or ''
     has_work = bool(re.search('(?i)umow[ayę]\\s+o\\s+prac[ęe]|etat|stosunek\\s+pracy', t))
     has_order = bool(re.search('(?i)umow[ayę]\\s+zlecen|zlecenie', t))
@@ -169,29 +177,36 @@ def detect_contract(text: str, fallback: str='') -> str:
     return fallback
 
 def amount_kind(text: str) -> str:
+    """Classify an amount as gross, net, or unspecified from local context."""
     if NET_RE.search(text or '') and (not GROSS_RE.search(text or '')):
         return 'netto'
     return 'brutto'
 
 def clean_header(h: str) -> str:
+    """Normalize a table header for semantic matching."""
     return norm_space(re.sub('[*_#]', '', h)).lower()
 
 def split_markdown_row(line: str) -> list[str]:
+    """Split a Markdown table row into normalized cells."""
     if '|' not in line:
         return []
     return [norm_space(x) for x in line.strip().strip('|').split('|')]
 
 def split_md_row(line: str) -> list[str]:
+    """Split a Markdown row while preserving normalized cell order."""
     return split_markdown_row(line)
 
 def is_separator_row(cells: list[str]) -> bool:
+    """Return whether a Markdown row is only a table separator."""
     return bool(cells) and all((not x or re.fullmatch(':?-{3,}:?', x) for x in cells))
 
 def header_has_money_context(headers: list[str]) -> bool:
+    """Return whether a table header describes remuneration amounts."""
     h = ' '.join(headers)
     return bool(re.search('(?i)wynagrod|kwota|brutto|netto|2025|zł|pln|kontrakt|zlecen|umowa', h))
 
 def infer_name_and_spec(cells: list[str], headers: list[str], idx_col: Optional[int]) -> tuple[str, str]:
+    """Infer record label and specialization from structured row text."""
     name = ''
     spec = ''
     for i, (c, h) in enumerate(zip(cells, headers)):
@@ -223,6 +238,7 @@ def infer_name_and_spec(cells: list[str], headers: list[str], idx_col: Optional[
     return (name, spec)
 
 def parse_idx(cells: list[str], headers: list[str]) -> tuple[Optional[int], Optional[int]]:
+    """Parse a row index from a candidate identifier cell."""
     for i, h in enumerate(headers):
         if re.search('(?i)^(?:lp\\.?|l\\.p\\.?|nr|numer)$', h):
             m = re.search('\\d+', cells[i] if i < len(cells) else '')
@@ -234,11 +250,13 @@ def parse_idx(cells: list[str], headers: list[str]) -> tuple[Optional[int], Opti
     return (None, None)
 
 def label_for_row(idx: Optional[int], name: str) -> str:
+    """Build the technical record label used for a parsed salary row."""
     if name:
         return name
     return f'Lekarz {idx}' if idx is not None else 'Lekarz'
 
 def table_should_be_excluded(headers: list[str], context: str) -> tuple[bool, str]:
+    """Return whether a table should be skipped as non-record or aggregate data."""
     h = ' '.join((clean_header(x) for x in headers))
     c = norm_space(context).lower()
     if (re.search(r'(?i)liczba\s+lekarzy|liczba\s+osób|liczba\s+osob', h)
@@ -262,6 +280,7 @@ def table_should_be_excluded(headers: list[str], context: str) -> tuple[bool, st
     return (False, '')
 
 def semantic_annual_salary_columns(headers: list[str]) -> tuple[int | None, int | None, int | None]:
+    """Identify table columns that represent annual salary amounts."""
     hs = [clean_header(h) for h in headers]
     lp = next((i for i, h in enumerate(hs) if re.search('(?i)^lp\\\\.?$', h)), None)
     amount = next((i for i, h in enumerate(hs) if re.search('(?i)wynagrodzenie.*brutto.*2025|brutto.*2025.*wynagrodzenie', h)), None)

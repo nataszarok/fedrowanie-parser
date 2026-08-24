@@ -30,7 +30,7 @@ __all__ = [
 
 
 def split_pages(text: str) -> list[tuple[int, str]]:
-    """Parse or process the `split_pages` layout/stage."""
+    """Split a document into parser page blocks while preserving page order."""
     src = text or ''
     matches = list(PAGE_RE.finditer(src))
     if not matches:
@@ -55,7 +55,7 @@ def split_pages(text: str) -> list[tuple[int, str]]:
     return out
 
 def page_is_2025_relevant(page: str, doc: str) -> bool:
-    """Parse or process the `page_is_2025_relevant` layout/stage."""
+    """Return whether a page is relevant to remuneration data for 2025."""
     years = {int(x) for x in YEAR_OTHER_RE.findall(page)}
     if years and YEAR not in years:
         tableish = page.count('|') >= 8 or len(money_cells(page)) >= 8
@@ -79,7 +79,7 @@ def suspicious_amount(row: SalaryRow) -> bool:
     return False
 
 def deduplicate(rows: Iterable[SalaryRow]) -> list[SalaryRow]:
-    """Parse or process the `deduplicate` layout/stage."""
+    """Remove duplicate salary rows while preserving the strongest source record."""
     rows = list(rows)
     markdown_amounts = {(r.case_pk, round(r.brutto if r.brutto is not None else r.netto, 2)) for r in rows if r.parser.startswith('markdown') and (r.brutto is not None or r.netto is not None)}
     seen = set()
@@ -106,7 +106,7 @@ def deduplicate(rows: Iterable[SalaryRow]) -> list[SalaryRow]:
     return out
 
 def classify_nonannual_response(doc: str) -> tuple[bool, str]:
-    """Parse or process the `classify_nonannual_response` layout/stage."""
+    """Classify responses that do not provide annual salary data."""
     date_count = len(re.findall('\\b2025-\\d{2}-\\d{2}\\b', doc))
     invoice_code_count = len(re.findall('\\b[A-ZŻŹĆĄŚĘŁÓŃ]{1,8}/2025/\\d{1,2}/\\d+\\b', doc))
     invoice_word_count = len(re.findall('(?i)\\bfaktur\\w*\\b|\\bnr\\s+faktur', doc))
@@ -142,7 +142,7 @@ def classify_nonannual_response(doc: str) -> tuple[bool, str]:
     return (False, '')
 
 def extract_recipient_messages(doc: str) -> tuple[str, dict]:
-    """Parse or process the `extract_recipient_messages` layout/stage."""
+    """Keep recipient-side messages and remove requester/quoted-thread noise."""
     pos = doc.find('Znormalizowana odpowiedź')
     thread = doc[pos:] if pos >= 0 else doc
     lines = thread.splitlines()
@@ -192,7 +192,7 @@ def extract_recipient_messages(doc: str) -> tuple[str, dict]:
     return ('\n\n'.join(recipient_parts), {'thread_detected': True, 'all_messages': len(headers), 'recipient_messages': recipient_messages, 'substantive_recipient_messages': substantive})
 
 def correspondence_status(doc: str, rows: list[SalaryRow]) -> tuple[str, str]:
-    """Parse or process the `correspondence_status` layout/stage."""
+    """Summarize whether correspondence contains usable recipient-side data."""
     refusal = bool(re.search('(?is)(?:odmaw\\w*|nie\\s+udostępni\\w*|nie\\s+udzieli\\w*|nie\\s+jest\\s+informacją\\s+publiczną|podlega\\s+ograniczeniu).{0,300}(?:wynagrodze[nń]|imion|nazwisk|danych\\s+osobowych|prywatnoś|prywatnos)', doc))
     anonymized = bool(re.search('(?i)(?:anonimiz|zanonimiz|bez\\s+podawania\\s+imion|bez\\s+imion\\s+i\\s+nazwisk|zestawienie\\s+nie\\s+zawiera\\s+imion|kod\\s+anonimowy|lekarz\\s+\\d+)', doc))
     distribution = bool(re.search('(?is)liczba\\s+lekarzy.{0,180}wynagrodzen.{0,140}przedzia', doc))
@@ -277,7 +277,7 @@ def topn_comment(doc: str) -> str:
     return ''
 
 def is_metadata_context(text: str) -> bool:
-    """Parse or process the `is_metadata_context` layout/stage."""
+    """Return whether text looks like metadata rather than a salary record."""
     return bool(re.search(r'(?i)kapita[łl]\s+zak[łl]adowy|\bKRS\b|\bREGON\b|\bNIP\b|kapita[łl]\s+sp[oó][łl]ki|s[ąa]d\s+rejonowy|rejestr\w*\s+s[ąa]dow', text or ''))
 
 def filter_registry_capital_false_rows(rows, doc: str):
@@ -354,7 +354,7 @@ def is_wrong_month(text: str) -> bool:
     return bool(re.search('(?i)(?:stycze[nń]|luty|marzec|kwiecie[nń]|maj|czerwiec|lipiec|sierpie[nń]|wrzesie[nń]|październik|pazdziernik|listopad|grudzie[nń]).{0,40}\\b(?:2024|2026|2027)\\b', text))
 
 def recipient_document(full_doc: str) -> tuple[str, dict]:
-    """Parse or process the `recipient_document` layout/stage."""
+    """Build the parser input document from recipient-side correspondence only."""
     doc, meta = extract_recipient_messages(full_doc)
     if len(money_cells(doc)) >= 10 or not re.search('(?m)^A\\) email jest odpowiedzią', full_doc):
         return (prefer_latest_correction(doc), meta)

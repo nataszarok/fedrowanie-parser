@@ -10,7 +10,7 @@ __all__ = [
 
 
 def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str, inherited_contract: str='', inherited_kind: str='brutto', inherited_spec: str='') -> list[SalaryRow]:
-    """Parse structured salary tables while preserving column semantics and provenance."""
+    """Parse structured Markdown/OCR tables into salary-row candidates."""
     lines = page.splitlines()
     rows: list[SalaryRow] = []
     i = 0

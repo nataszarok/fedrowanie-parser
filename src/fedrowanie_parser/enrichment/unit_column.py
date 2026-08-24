@@ -26,6 +26,7 @@ HEADER_LIKE_RE = re.compile(
 MONEY_RE = re.compile(r'-?\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{2})|-?\d{4,9}(?:[,.]\d{2})')
 
 def split_markdown_row(line:str)->list[str]:
+    """Split a Markdown table row into normalized cells."""
     s=str(line or '').strip()
     if not s.startswith('|'):
         return []
@@ -34,9 +35,11 @@ def split_markdown_row(line:str)->list[str]:
     return [_norm(x) for x in s.split('|')]
 
 def is_separator_row(cells:list[str])->bool:
+    """Return whether a Markdown row is only a table separator."""
     return bool(cells) and all((not c) or re.fullmatch(r':?-{3,}:?',c) for c in cells)
 
 def unit_column_indexes(headers:list[str])->list[int]:
+    """Return indexes of columns whose headers describe organizational units."""
     out=[]
     for i,h in enumerate(headers):
         h=_norm(h)
@@ -45,6 +48,7 @@ def unit_column_indexes(headers:list[str])->list[int]:
     return out
 
 def clean_unit_value(v:str)->str:
+    """Normalize and validate an organizational-unit cell value."""
     s=_norm(v)
     if not s:
         return ''

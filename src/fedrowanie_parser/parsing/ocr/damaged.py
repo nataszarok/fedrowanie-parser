@@ -16,7 +16,7 @@ __all__ = [
 
 
 def parse_ocr_contract_amount_list(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str) -> list[SalaryRow]:
-    """Parse or process the `parse_ocr_contract_amount_list` layout/stage."""
+    """Parse ocr contract amount list layouts into salary-row candidates."""
     rows = []
     seen_raw = set()
     for line in page.splitlines():
@@ -53,7 +53,7 @@ def parse_ocr_contract_amount_list(case_pk: int, institution_pk: Optional[int], 
     return out
 
 def parse_ocr_broken_numbered_salary_table(case_pk, institution_pk, placowka, page_no, page):
-    """Reconstruct a broken OCR table only when later doctor numbers anchor the sequence."""
+    """Parse ocr broken numbered salary table layouts into salary-row candidates."""
     if not re.search(r'(?i)oznaczenie\s+lekarza', page):
         return []
     if not re.search(r'(?is)roczne\s+wynagrodzenie.{0,120}(?:zł|nfz|2025)', page):
@@ -118,7 +118,7 @@ def parse_ocr_broken_numbered_salary_table(case_pk, institution_pk, placowka, pa
     return out
 
 def parse_forma_name_amount_ocr(case_pk, institution_pk, placowka, page_no, page):
-    """OCR table headed FORMA where each row starts with a person/practice and its annual amount."""
+    """Parse forma name amount ocr layouts into salary-row candidates."""
     if not (re.search(r'(?m)^FORMA\s*$',page) or re.search(r'(?m)^FORMA\s+[A-ZĄĆĘŁŃÓŚŹŻ]',page)):
         return []
     start=re.search(r'(?m)^FORMA\b',page)
@@ -144,7 +144,7 @@ def parse_forma_name_amount_ocr(case_pk, institution_pk, placowka, page_no, page
     return out if len(out)>=5 else []
 
 def parse_lekarz_inline_anon_list(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_lekarz_inline_anon_list` layout/stage."""
+    """Parse lekarz inline anon list layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     rows = []
     numbered = []

@@ -14,9 +14,11 @@ ROLE_RE = re.compile(r'(?i)^(?:koordynator|zast[ęe]pca koordynatora|z-ca koordy
                      r'ordynator|zast[ęe]pca ordynatora|kierownik|p\.?o\.?.*)$')
 
 def norm(s):
+    """Normalize whitespace and punctuation in a text value."""
     return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip(' |#*_-–—:\t\r\n')
 
 def looks_like_unit(s):
+    """Return whether text plausibly names an organizational unit."""
     s=norm(s)
     if not s or len(s)>180 or CONTACT_RE.search(s) or MONEY_RE.search(s):
         return False
@@ -28,6 +30,7 @@ def looks_like_unit(s):
     return bool(UNIT_RE.search(s))
 
 def unit_from_raw_row(raw):
+    """Extract an organizational unit directly from a structured source row."""
     cells=[norm(x) for x in str(raw or '').strip().strip('|').split('|')]
     # Explicit schema frequently used in responses:
     # lekarz N | nazwa komórki organizacyjnej | kwota | rodzaj umowy
@@ -64,6 +67,7 @@ def split_existing_specialization(spec):
     return '', s
 
 def section_unit_for_row(doc, raw_row):
+    """Infer the governing organizational unit from a preceding section heading."""
     text=str(doc or '')
     raw=str(raw_row or '')
     p=text.find(raw)
@@ -101,6 +105,7 @@ def section_unit_for_row(doc, raw_row):
 
 def infer_unit_and_specialization(doc, raw_row, existing_spec):
     # Highest confidence: unit is literally a column/value in the record.
+    """Separate organizational-unit context from medical specialization."""
     raw_unit=unit_from_raw_row(raw_row)
     old_unit, cleaned_spec=split_existing_specialization(existing_spec)
     if raw_unit:

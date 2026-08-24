@@ -17,6 +17,7 @@ def _money(s):
     return vals
 
 def contract_type_from_header(header:str)->Optional[str]:
+    """Infer the contract type encoded by a table-column header."""
     h=_norm(header).casefold()
     if re.search(r'um[oó]w\w*\s+o\s+prac[ęe]|\buop\b',h):
         return 'umowa o pracę'
@@ -27,6 +28,7 @@ def contract_type_from_header(header:str)->Optional[str]:
     return None
 
 def contract_amount_columns(headers:list[str])->list[tuple[int,str]]:
+    """Return salary columns whose headers encode a specific contract type."""
     out=[]
     for i,h in enumerate(headers):
         ct=contract_type_from_header(h)

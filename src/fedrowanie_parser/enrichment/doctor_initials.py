@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 def norm(s):
+    """Normalize whitespace and punctuation in a text value."""
     return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip(' |#*_-–—:\t\r\n')
 
 MONEY=re.compile(r'^\s*-?\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{2})\s*(?:z[łl]|PLN)?\s*$',re.I)
@@ -11,9 +12,11 @@ SURNAME_HEADER=re.compile(r'(?i)^nazwisko$')
 FIRST_HEADER=re.compile(r'(?i)^imi[ęe]$')
 
 def split_row(s):
+    """Split a pipe-delimited source row into normalized cells."""
     return [norm(x) for x in str(s or '').strip().strip('|').split('|')]
 
 def normalize_initials(s):
+    """Normalize physician initials to a consistent dotted representation."""
     s=norm(s).replace(' ','')
     if not s: return ''
     # A.B / A.B. / AB -> A.B.

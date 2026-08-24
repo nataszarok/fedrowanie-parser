@@ -525,12 +525,23 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
 def _store_case_status(con, rows):
     """Parse or process the `_store_case_status` layout/stage."""
     con.execute('DROP TABLE IF EXISTS salaries_case_status')
-    con.execute('\n        CREATE TABLE salaries_case_status (\n            case_pk INTEGER, institution_pk INTEGER, placówka TEXT,\n            status TEXT, reason TEXT, parsed_candidate_rows INTEGER\n        )\n    ')
-    con.executemany('\n        INSERT INTO salaries_case_status\n        (case_pk, institution_pk, placówka, status, reason, parsed_candidate_rows)\n        VALUES (?, ?, ?, ?, ?, ?)\n    ', rows)
+    con.execute("""
+        CREATE TABLE salaries_case_status (
+            case_pk INTEGER, institution_pk INTEGER, placówka TEXT,
+            status TEXT, reason TEXT, parsed_candidate_rows INTEGER
+        )
+    
+""")
+    con.executemany("""
+        INSERT INTO salaries_case_status
+        (case_pk, institution_pk, placówka, status, reason, parsed_candidate_rows)
+        VALUES (?, ?, ?, ?, ?, ?)
+    
+""", rows)
     con.commit()
 
 def extract_all(con: sqlite3.Connection) -> list[SalaryRow]:
-    """Extract salary rows from all eligible cases in the source database."""
+    """Extract normalized salary rows from all eligible cases in the source database."""
     con.row_factory = sqlite3.Row
     query = "\n        SELECT cp.case_pk, cp.text, c.institution_pk,\n               COALESCE(i.name, c.name, '') AS institution_name\n        FROM case_pages cp\n        LEFT JOIN cases c ON c.pk = cp.case_pk\n        LEFT JOIN institutions i ON i.pk = c.institution_pk\n        WHERE cp.text IS NOT NULL AND TRIM(cp.text) <> ''\n        ORDER BY cp.case_pk, cp.rowid\n    "
     cases = {}

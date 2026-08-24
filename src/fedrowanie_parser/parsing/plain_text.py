@@ -12,7 +12,7 @@ __all__ = [
 
 
 def parse_plain_lines(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str) -> list[SalaryRow]:
-    """Parse or process the `parse_plain_lines` layout/stage."""
+    """Parse salary records from unstructured plain-text lines."""
     out: list[SalaryRow] = []
     lines = [norm_space(x) for x in page.splitlines()]
     page_kind = amount_kind(page[:1200])
@@ -89,7 +89,7 @@ def parse_plain_lines(case_pk: int, institution_pk: Optional[int], placowka: str
     return out
 
 def parse_section_state_rows(case_pk: int, institution_pk: Optional[int], placowka: str, doc: str) -> list[SalaryRow]:
-    """Parse or process the `parse_section_state_rows` layout/stage."""
+    """Parse rows that inherit semantic context from section headings."""
     out: list[SalaryRow] = []
     current_contract = ''
     current_page: Optional[int] = None

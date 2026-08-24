@@ -21,7 +21,7 @@ __all__ = [
 
 
 def parse_vertical_label_amount_pairs(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str, inherited_contract: str='') -> list[SalaryRow]:
-    """Parse or process the `parse_vertical_label_amount_pairs` layout/stage."""
+    """Parse vertical label amount pairs layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     pairs = []
     for i in range(len(lines) - 1):
@@ -48,7 +48,7 @@ def parse_vertical_label_amount_pairs(case_pk: int, institution_pk: Optional[int
     return [SalaryRow(case_pk, institution_pk, placowka, label, '', inherited_contract, None, val, page_no, 'vertical-label-amount', 'wysoka', raw) for label, val, raw in pairs]
 
 def parse_vertical_indexname_amount(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str, inherited_contract: str='') -> list[SalaryRow]:
-    """Parse or process the `parse_vertical_indexname_amount` layout/stage."""
+    """Parse vertical indexname amount layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     rows = []
     for i in range(len(lines) - 1):
@@ -74,7 +74,7 @@ def parse_vertical_indexname_amount(case_pk: int, institution_pk: Optional[int],
     return rows
 
 def parse_vertical_index_code_label_amount(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_vertical_index_code_label_amount` layout/stage."""
+    """Parse vertical index code label amount layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     out = []
     i = 0
@@ -100,7 +100,7 @@ def parse_vertical_index_code_label_amount(case_pk, institution_pk, placowka, pa
     return out if len(out) >= 3 else []
 
 def parse_vertical_named_salary_table(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_vertical_named_salary_table` layout/stage."""
+    """Parse vertical named salary table layouts into salary-row candidates."""
     if not (re.search('(?i)imię i nazwisko|imie i nazwisko', page) and re.search('(?i)kwota wynagrodzenia.*2025', page)):
         return []
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
@@ -118,7 +118,7 @@ def parse_vertical_named_salary_table(case_pk, institution_pk, placowka, page_no
     return out if len(out) >= 3 else []
 
 def parse_vertical_role_named_amount(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_vertical_role_named_amount` layout/stage."""
+    """Parse vertical role named amount layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     out = []
     role = ''
@@ -159,7 +159,7 @@ def parse_vertical_role_named_amount(case_pk, institution_pk, placowka, page_no,
     return out
 
 def parse_two_section_vertical_salary(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_two_section_vertical_salary` layout/stage."""
+    """Parse two section vertical salary layouts into salary-row candidates."""
     if not (re.search('(?i)wynagrodzenie lekarzy zatrudnionych', page) and re.search('(?i)umow[ęe] o prac[ęe]', page) and re.search('(?i)umow[ęe] cywilnoprawn', page)):
         return []
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
@@ -184,7 +184,7 @@ def parse_two_section_vertical_salary(case_pk, institution_pk, placowka, page_no
     return out if len(out) >= 5 else []
 
 def parse_numbered_amount_only_series(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_numbered_amount_only_series` layout/stage."""
+    """Parse numbered amount only series layouts into salary-row candidates."""
     m = re.search('(?is)wynagrodzenia.{0,160}(?:kształtowały|ksztaltowaly|następująco|nastepujaco)\\s*:\\s*(.+)', page)
     if not m:
         return []
@@ -202,7 +202,7 @@ def parse_numbered_amount_only_series(case_pk, institution_pk, placowka, page_no
     return out if len(out) >= 5 else []
 
 def parse_parallel_name_amount_lists(case_pk: int, institution_pk: Optional[int], placowka: str, doc: str) -> list[SalaryRow]:
-    """Parse or process the `parse_parallel_name_amount_lists` layout/stage."""
+    """Parse parallel name amount lists layouts into salary-row candidates."""
     text = norm_space(doc)
     m = re.search('(?is)imienna\\s+lista\\s+lekarzy.*?2025\\s*:?\\s*(.*?)łączne\\s+wynagrodzenie\\s+wypłacone\\s+w\\s*2025\\s*roku\\s*:?', text)
     if not m:
@@ -220,16 +220,7 @@ def parse_parallel_name_amount_lists(case_pk: int, institution_pk: Optional[int]
     return [SalaryRow(case_pk, institution_pk, placowka, name, '', '', None, val, None, 'parallel-name-amount-lists', 'wysoka', f'{i}. {name} | {val:.2f}') for i, (name, val) in enumerate(zip(names, amounts), 1)]
 
 def parse_parallel_doctor_amount_lists(case_pk, institution_pk, placowka, page_no, page):
-    """
-    Dwie równoległe listy lekarzy i wynagrodzeń.
-    Zachowujemy pozycję każdego tokenu, a nieczytelną kwotę pomijamy bez
-    przesuwania kolejnych par.
-
-    Dopuszczamy jeden bezpieczny repair OCR nazwisk:
-    jeśli lista jest niemal wyłącznie listą pojedynczych nazwisk, liczba
-    kwot jest większa dokładnie o 1, a dokładnie jeden element ma postać
-    "Nazwisko Nazwisko", rozdzielamy ten element na dwie osoby.
-    """
+    """Parse parallel doctor amount lists layouts into salary-row candidates."""
     m1=re.search(
         r'(?is)\bLekarze\s*:\s*(.+?)\bWynagrodzenia\s+lekarzy\s*:\s*(.+)',
         page
@@ -309,15 +300,7 @@ def parse_parallel_doctor_amount_lists(case_pk, institution_pk, placowka, page_n
     return out
 
 def parse_anonymous_amount_only_series(case_pk, institution_pk, placowka, page_no, page):
-    """
-    Anonimowa seria samych kwot po jednoznacznym nagłówku:
-      Kwoty brutto:
-      182.685,60
-      249.794,96
-      ...
-
-    Wymagany jest kontekst lekarzy/wynagrodzeń 2025 oraz minimum 3 kwoty.
-    """
+    """Parse anonymous amount only series layouts into salary-row candidates."""
     if not re.search(r'(?i)\b(?:kwoty\s+brutto|kwoty\s+netto)\s*:', page):
         return []
     if not (re.search(r'(?i)lekarz',page) or re.search(r'(?i)wynagrodze[nń]',page)):

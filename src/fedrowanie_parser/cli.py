@@ -11,6 +11,7 @@ from .pipeline import extract_all
 from .io.storage import write_csvs, write_sqlite
 
 def main() -> None:
+    """Run the CLI: parse arguments, extract rows, and write SQLite/CSV outputs."""
     ap = argparse.ArgumentParser()
     ap.add_argument('db', nargs='?', default='fedrowanie.db', help='wejściowa baza SQLite')
     ap.add_argument('--out-db', default='fedrowanie_wynagrodzenia_2025.db')

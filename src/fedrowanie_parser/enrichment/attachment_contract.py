@@ -66,6 +66,7 @@ def _logical_label(hits: list[tuple[str,str,int]]) -> tuple[Optional[str],Option
     return None,None
 
 def split_attachments(case_text: str) -> list[AttachmentSection]:
+    """Split document text into attachment-scoped text blocks."""
     text=case_text or ""
     ms=list(ATTACHMENT_RE.finditer(text))
     out=[]
@@ -195,6 +196,7 @@ def _homogeneous_zone(att: AttachmentSection) -> Optional[ContractZone]:
     )
 
 def contract_zones(case_text: str) -> list[ContractZone]:
+    """Identify attachment regions associated with explicit contract types."""
     out=[]
     for att in split_attachments(case_text):
         fz=_filename_zone(att)
@@ -239,6 +241,7 @@ def _meaningful_name(name) -> Optional[str]:
     return s
 
 def match_row_to_zone(*,raw_row,name,gross,net,zones:Iterable[ContractZone]):
+    """Match a salary row to the attachment contract zone containing it."""
     raw=_compact(raw_row)
     nm=_meaningful_name(name)
     gk,nk=_money_key(gross),_money_key(net)
@@ -282,6 +285,7 @@ def match_row_to_zone(*,raw_row,name,gross,net,zones:Iterable[ContractZone]):
     }
 
 def fill_missing_contracts_for_case(case_text: str, rows: list[dict]) -> list[dict]:
+    """Fill missing contract types using attachment-level context."""
     zones=contract_zones(case_text)
     out=[]
     for row in rows:

@@ -23,7 +23,7 @@ __all__ = [
 
 
 def parse_numbered_named_inline_salary(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_numbered_named_inline_salary` layout/stage."""
+    """Parse numbered named inline salary layouts into salary-row candidates."""
     out = []
     for line in page.splitlines():
         raw = norm_space(line)
@@ -41,7 +41,7 @@ def parse_numbered_named_inline_salary(case_pk, institution_pk, placowka, page_n
     return out if len(out) >= 3 else []
 
 def parse_lekarz_inline_salary(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_lekarz_inline_salary` layout/stage."""
+    """Parse lekarz inline salary layouts into salary-row candidates."""
     out = []
     for line in page.splitlines():
         raw = norm_space(line)
@@ -55,7 +55,7 @@ def parse_lekarz_inline_salary(case_pk, institution_pk, placowka, page_no, page)
     return out if len(out) >= 3 else []
 
 def parse_embedded_numbered_salary_list(case_pk, institution_pk, placowka, page_no, page, full_doc=''):
-    """Parse or process the `parse_embedded_numbered_salary_list` layout/stage."""
+    """Parse embedded numbered salary list layouts into salary-row candidates."""
     context = full_doc or page
     if not re.search('(?i)wynagrod', context) or '2025' not in context:
         return []
@@ -78,7 +78,7 @@ def parse_embedded_numbered_salary_list(case_pk, institution_pk, placowka, page_
     return out if len(out) >= 5 or (explicit and len(out) >= 3) else []
 
 def parse_specialty_amount_lines(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_specialty_amount_lines` layout/stage."""
+    """Parse specialty amount lines layouts into salary-row candidates."""
     annual_ctx=bool(
         re.search(r'(?is)zestawienie\s+wynagrodze[nń]',page)
         or re.search(r'(?is)wynagrodzenia.{0,220}(?:podziale|stanowisk).{0,220}2025',page)
@@ -119,7 +119,7 @@ def parse_specialty_amount_lines(case_pk, institution_pk, placowka, page_no, pag
     return out if len(out)>=5 else []
 
 def parse_explicit_annual_prose_salary(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_explicit_annual_prose_salary` layout/stage."""
+    """Parse explicit annual prose salary layouts into salary-row candidates."""
     has_numbered_context=bool(re.search(r'(?is)zestawienie.{0,100}wynagrodze[nń].{0,100}2025', page))
     has_single_explicit=bool(re.search(
         r'(?is)łączne\s+wynagrodzenie\s+wypłacone\s+.{3,140}?\s+w\s+2025\s+roku\s+wyniosło\s+'
@@ -168,14 +168,7 @@ def parse_explicit_annual_prose_salary(case_pk, institution_pk, placowka, page_n
     return []
 
 def parse_body_lekarz_number_amount(case_pk, institution_pk, placowka, page_no, page):
-    """
-    Roczne listy lekarzy w body/OCR:
-      Lekarz 1 - 35042 zł
-      Lekarz nr 3 952 736,62 zł
-      LEKARZ (1) / 13 112,63
-      Lekarz Jan Kowalski 697 941,71 zł
-      Lekarz 1 / - / 931 818,70 zł brutto
-    """
+    """Parse body lekarz number amount layouts into salary-row candidates."""
     if not re.search(r'(?is)(?:wynagrodze[nń]|zarobk).{0,260}2025|2025.{0,260}(?:wynagrodze[nń]|zarobk)', page):
         return []
     out=[]; seen=set()
@@ -255,11 +248,7 @@ def parse_body_lekarz_number_amount(case_pk, institution_pk, placowka, page_no, 
     return out if len(out)>=2 else []
 
 def parse_body_lp_amount(case_pk, institution_pk, placowka, page_no, page):
-    """
-    Treść maila:
-      LP 1 kwota za 2025 rok - 299.437,92
-      LP 2 ... - 181.292,96
-    """
+    """Parse body lp amount layouts into salary-row candidates."""
     if not re.search(r'(?i)2025', page):
         return []
     out=[]
@@ -285,7 +274,7 @@ def parse_body_lp_amount(case_pk, institution_pk, placowka, page_no, page):
     return out if len(out)>=2 else []
 
 def parse_annual_amount_contract_lines(case_pk, institution_pk, placowka, page_no, page):
-    """Annual anonymous list: one salary amount and contract type on each line."""
+    """Parse annual amount contract lines layouts into salary-row candidates."""
     if not (re.search(r'(?i)wynagrodzenia\s+lekarzy\s+za\s+rok\s+2025', page)
             and re.search(r'(?i)bez\s+imion\s+i\s+nazwisk|bez\s+.*nazwisk', page)):
         return []
@@ -301,7 +290,7 @@ def parse_annual_amount_contract_lines(case_pk, institution_pk, placowka, page_n
             for i,(raw,val,ct) in enumerate(candidates,1)]
 
 def parse_contract_practice_cost_list(case_pk, institution_pk, placowka, page_no, page):
-    """Prose list introduced as N doctors on contracts and their 2025 cost."""
+    """Parse contract practice cost list layouts into salary-row candidates."""
     m=re.search(r'(?is)na\s+kontraktach\s+zatrudnionych\s+by[łl]o\s+(\w+|\d+)\s+lekarzy.{0,220}?koszt.{0,120}?2025.{0,180}?nast[eę]puj[aą]co\s*:',page)
     if not m: return []
     block=page[m.end():]
@@ -318,7 +307,7 @@ def parse_contract_practice_cost_list(case_pk, institution_pk, placowka, page_no
     return out if len(out)>=2 else []
 
 def parse_single_anonymized_annual_amount(case_pk, institution_pk, placowka, page_no, page):
-    """Single anonymized annual-salary row whose identifier disappeared in OCR."""
+    """Parse single anonymized annual amount layouts into salary-row candidates."""
     if not (re.search(r'(?i)zanonimizowane\s+dane\s+osobowe',page)
             and re.search(r'(?is)wynagrodzenie\s+brutto.{0,60}(?:r[o0]k|tok)\s+2025',page)):
         return []
@@ -330,15 +319,7 @@ def parse_single_anonymized_annual_amount(case_pk, institution_pk, placowka, pag
                       'single-anonymized-annual-amount','wysoka',norm_space(m.group(0)))]
 
 def parse_annual_named_colon_amount_list(case_pk, institution_pk, placowka, page_no, page):
-    """
-    Roczne zestawienie w treści maila / OCR:
-      ZESTAWIENIE WYNAGRODZEŃ ... LEKARZOM W 2025 ROKU
-      KOWALSKI JAN: 58 523,85
-      NOWAK ANNA: 46 322,42
-
-    Reguła generyczna: wymaga wyraźnego kontekstu wynagrodzeń lekarzy i roku 2025,
-    a następnie co najmniej 3 wierszy 'nazwa: kwota'.
-    """
+    """Parse annual named colon amount list layouts into salary-row candidates."""
     if not re.search(r'(?is)(?:zestawienie|wykaz|lista).{0,120}wynagrodze[nń].{0,120}(?:lekarz|2025)|wynagrodze[nń].{0,120}lekarz.{0,120}2025', page):
         return []
     out=[]

@@ -54,6 +54,7 @@ class AnnualEntity:
     entity_kind: str
 
 def parse_money_pl(value: str) -> Optional[float]:
+    """Parse a Polish-formatted monetary value into a decimal number."""
     s=(value or "").strip().replace("\xa0"," ").replace(" ","")
     s=s.replace(".","").replace(",",".")
     try:
@@ -62,6 +63,7 @@ def parse_money_pl(value: str) -> Optional[float]:
         return None
 
 def clean_entity(value: str) -> str:
+    """Normalize a person or entity label extracted from a monthly ledger."""
     s=" ".join((value or "").split()).strip(" \t.,;:|")
     # Strip only a complete professional prefix followed by whitespace.
     # This intentionally does NOT turn "Lekan" into "an".
@@ -71,10 +73,12 @@ def clean_entity(value: str) -> str:
 def canonical_entity(value: str) -> str:
     # Conservative normalization: no fuzzy merge, no diacritic removal.
     # Case and whitespace differences are safe to merge.
+    """Return a canonical comparison key for an entity label."""
     s=clean_entity(value)
     return s.casefold()
 
 def display_choice(values: Iterable[str]) -> str:
+    """Choose the preferred display form among equivalent entity labels."""
     counts=defaultdict(int)
     original={}
     for v in values:
@@ -87,6 +91,7 @@ def display_choice(values: Iterable[str]) -> str:
     return original[key]
 
 def classify_entity(name: str) -> str:
+    """Classify a ledger entity as a person, organization, or unknown."""
     s=clean_entity(name)
     if not s:
         return "empty"
@@ -100,6 +105,7 @@ def classify_entity(name: str) -> str:
     return "other"
 
 def parse_monthly_ledger(text: str, target_year: int=2025) -> list[LedgerTx]:
+    """Parse monthly ledger rows into normalized salary transactions."""
     if not HEADER_RE.search(text or ""):
         return []
     out=[]
@@ -173,6 +179,7 @@ def _safe_same_person(a: AnnualEntity, b: AnnualEntity) -> bool:
     return False
 
 def merge_local_person_variants(rows: Iterable[AnnualEntity]) -> list[AnnualEntity]:
+    """Merge likely spelling variants of the same person within one institution."""
     rows=list(rows)
     parent=list(range(len(rows)))
 
@@ -222,6 +229,7 @@ def merge_local_person_variants(rows: Iterable[AnnualEntity]) -> list[AnnualEnti
     return sorted(out,key=lambda x:x.annual_total,reverse=True)
 
 def aggregate_transactions(txs: Iterable[LedgerTx]) -> list[AnnualEntity]:
+    """Aggregate parsed transactions into annual totals per entity."""
     groups=defaultdict(list)
     for tx in txs:
         groups[tx.entity_key].append(tx)
@@ -244,6 +252,7 @@ def aggregate_transactions(txs: Iterable[LedgerTx]) -> list[AnnualEntity]:
     return sorted(out,key=lambda x:x.annual_total,reverse=True)
 
 def aggregate_monthly_ledger(text: str, target_year: int=2025) -> list[AnnualEntity]:
+    """Parse and aggregate a monthly ledger into annual remuneration rows."""
     return aggregate_transactions(parse_monthly_ledger(text,target_year))
 
 def near_duplicate_candidates(rows: Iterable[AnnualEntity], threshold: float=0.90):
@@ -268,6 +277,7 @@ def near_duplicate_candidates(rows: Iterable[AnnualEntity], threshold: float=0.9
     return sorted(out,key=lambda x:x["score"],reverse=True)
 
 def read_case_text(db_path: str, institution_pk: int) -> tuple[int,str]:
+    """Read all source text associated with a case from SQLite."""
     con=sqlite3.connect(db_path)
     con.row_factory=sqlite3.Row
     row=con.execute(
@@ -289,6 +299,7 @@ def read_case_text(db_path: str, institution_pk: int) -> tuple[int,str]:
     return case_pk,"\n".join(parts)
 
 def write_csv(path: str, rows: Iterable[AnnualEntity]):
+    """Write aggregated monthly-ledger rows to CSV."""
     rows=list(rows)
     fields=list(asdict(rows[0]).keys()) if rows else [
         "entity_key","display_name","annual_total","tx_count","months_count",
@@ -301,6 +312,7 @@ def write_csv(path: str, rows: Iterable[AnnualEntity]):
             w.writerow(asdict(r))
 
 def main():
+    """Run the standalone monthly-ledger parser CLI."""
     ap=argparse.ArgumentParser()
     ap.add_argument("db")
     ap.add_argument("--institution-pk",type=int,required=True)

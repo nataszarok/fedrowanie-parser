@@ -18,12 +18,12 @@ __all__ = [
 
 
 def page_context_contract(lines: list[str], pos: int, fallback: str='') -> str:
-    """Parse or process the `page_context_contract` layout/stage."""
+    """Infer the local contract context for a row from nearby page lines."""
     chunk = '\n'.join(lines[max(0, pos - 12):pos + 1])
     return detect_contract(chunk, fallback)
 
 def parse_indexed_three_col_continuation(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str, inherited_contract: str='') -> list[SalaryRow]:
-    """Parse or process the `parse_indexed_three_col_continuation` layout/stage."""
+    """Parse indexed three col continuation layouts into salary-row candidates."""
     candidates = []
     for raw in page.splitlines():
         if not raw.strip().startswith('|') or re.fullmatch('\\s*\\|?\\s*:?-{3,}:?\\s*(?:\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*', raw):
@@ -50,7 +50,7 @@ def parse_indexed_three_col_continuation(case_pk: int, institution_pk: Optional[
     return rows
 
 def parse_indexed_single_salary_markdown(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_indexed_single_salary_markdown` layout/stage."""
+    """Parse indexed single salary markdown layouts into salary-row candidates."""
     out = []
     for raw in page.splitlines():
         if not raw.lstrip().startswith('|'):
@@ -79,7 +79,7 @@ def parse_indexed_single_salary_markdown(case_pk, institution_pk, placowka, page
     return out if len(out) >= 1 else []
 
 def parse_indexed_total_gross_continuation(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_indexed_total_gross_continuation` layout/stage."""
+    """Parse indexed total gross continuation layouts into salary-row candidates."""
     out = []
     for raw in page.splitlines():
         if not raw.lstrip().startswith('|'):
@@ -101,21 +101,7 @@ def parse_indexed_total_gross_continuation(case_pk, institution_pk, placowka, pa
     return out
 
 def parse_salary_bracket_index_table(case_pk, institution_pk, placowka, page_no, page, full_doc):
-    """
-    Tabela z rozłącznymi koszykami wynagrodzeń, np.:
-      <500k | >500k | >1m
-
-    Każdy Lp. oznacza jednego lekarza. Jeśli OCR przesunie kwotę następnego
-    lekarza do poprzedniego wiersza, np.:
-      129 | ... | 471 233 | 875 605 |
-      130 | ... |         |         |
-    rozdzielamy:
-      129 -> 471 233
-      130 -> 875 605
-
-    Reguła działa wyłącznie dla tabel z rozłącznymi progami wynagrodzeń,
-    więc nie dotyczy tabel brutto/netto ani UoP/zlecenie/kontrakt.
-    """
+    """Parse salary bracket index table layouts into salary-row candidates."""
     if not (
         re.search(r"(?i)<\s*500[ .]?000", full_doc)
         and re.search(r"(?i)>\s*500[ .]?000", full_doc)
@@ -188,7 +174,7 @@ def parse_salary_bracket_index_table(case_pk, institution_pk, placowka, page_no,
     return out
 
 def parse_parallel_index_amount_columns(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_parallel_index_amount_columns` layout/stage."""
+    """Parse parallel index amount columns layouts into salary-row candidates."""
     out = []
     for raw in page.splitlines():
         if not raw.lstrip().startswith('|'):
@@ -214,7 +200,7 @@ def parse_parallel_index_amount_columns(case_pk, institution_pk, placowka, page_
     return out if len(out) >= 10 and len(set(idx)) == len(idx) else []
 
 def parse_vertical_idx_code_gross_net(case_pk, institution_pk, placowka, page_no, page):
-    """Parse or process the `parse_vertical_idx_code_gross_net` layout/stage."""
+    """Parse vertical idx code gross net layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     out = []
     i = 0

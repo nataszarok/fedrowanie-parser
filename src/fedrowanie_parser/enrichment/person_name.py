@@ -2,6 +2,7 @@ from __future__ import annotations
 import re
 
 def norm(s):
+    """Normalize whitespace and punctuation in a text value."""
     return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip(' |#*_-–—:\t\r\n')
 
 NAME_HEADER_RE=re.compile(r'(?i)^(?:nazwisko\s+i\s+imi[ęe]|nazwisko\s+imi[ęe]|imi[ęe]\s+i\s+nazwisko|imi[ęe]\s+nazwisko|nazwisko(?:\s+lekarza)?|dane\s+lekarza)$')
@@ -10,11 +11,13 @@ BAD_RE=re.compile(r'(?i)\b(?:lekarz|specjalista|specjalizacja|asystent|rezydent|
 TOKEN_RE=re.compile(r"^[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźżÀ-ÖØ-öø-ÿ'’-]+$")
 
 def split_row(line):
+    """Split a pipe-delimited source row into normalized cells."""
     s=str(line or '').strip()
     if '|' not in s: return []
     return [norm(x) for x in s.strip('|').split('|')]
 
 def money_value(cell):
+    """Parse a monetary value from a single table cell."""
     m=MONEY_RE.search(str(cell or ''))
     if not m: return None
     t=m.group(0).replace(' ','')
@@ -23,6 +26,7 @@ def money_value(cell):
     except ValueError: return None
 
 def looks_like_person_name(s):
+    """Return whether text plausibly contains a physician's full name."""
     s=norm(s)
     if not s or len(s)>100 or BAD_RE.search(s) or any(ch.isdigit() for ch in s): return False
     toks=s.split()
@@ -33,6 +37,7 @@ def looks_like_person_name(s):
     return upper==len(toks) or caps==len(toks)
 
 def document_person_name_maps(doc):
+    """Build row-to-person lookup maps from explicit name columns."""
     raw_map={}; idx_amount_map={}; name_idx=None
     for line in str(doc or '').splitlines():
         cells=split_row(line)
@@ -56,6 +61,7 @@ def document_person_name_maps(doc):
     return raw_map,idx_amount_map
 
 def infer_person_name(raw_row, existing_spec='', unit=''):
+    """Infer a physician name from a structured row when headers are unavailable."""
     cells=split_row(raw_row)
     if not cells: return ''
     candidates=[]; unit_cf=norm(unit).casefold()

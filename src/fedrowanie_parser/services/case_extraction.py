@@ -12,7 +12,7 @@ from ..models import SalaryRow
 
 
 def validate_case_rows(rows: Iterable[SalaryRow]) -> list[SalaryRow]:
-    """Materialize and validate case rows without mutating their semantics."""
+    """Materialize case rows and validate required identifiers."""
     materialized = list(rows)
     for row in materialized:
         if row.case_pk is None or row.institution_pk is None:

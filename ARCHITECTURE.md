@@ -89,3 +89,10 @@ Public API is intentionally visible at the top of implementation modules.
 - Cross-module imports of private helpers are prohibited.
 - Shared behavior belongs in a shared module rather than being imported as a
   private implementation detail from an unrelated module.
+
+## Readability conventions
+
+- Multi-line SQL is written as triple-quoted strings, not escaped `\n` literals.
+- Public functions have short docstrings that describe purpose and return behavior.
+- Docstrings avoid repeating parameter names when the signature is already self-explanatory.
+- Longer docstrings are reserved for non-obvious parsing assumptions or activation guards.
