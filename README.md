@@ -4,22 +4,62 @@ Parser odpowiedzi placówek medycznych dotyczących wynagrodzeń lekarzy za 2025
 
 Repozytorium zawiera aktualną wersję parsera **v35**, rozbitą na główny parser i wyspecjalizowane moduły kontekstowe. Projekt jest przygotowany do uruchamiania przez **Poetry**.
 
-## Co parser wyciąga
+## Przykładowy wynik
 
-Tabela wynikowa zawiera m.in.:
+Po parsowaniu dane są normalizowane do jednej tabeli. Przykładowe, zanonimizowane wiersze mogą wyglądać tak:
 
-- identyfikator sprawy i placówki,
-- techniczną nazwę rekordu,
-- **imię i nazwisko**,
-- **inicjały** (gdy placówka anonimizuje lekarzy),
-- **specjalizację**,
-- **stanowisko/status**,
-- **jednostkę/oddział**,
-- **typ umowy**,
-- wynagrodzenie netto i brutto,
-- stronę, użyty parser, poziom pewności, surowy wiersz i komentarz.
+| placówka | imię i nazwisko | inicjały | specjalizacja | stanowisko/status | jednostka/oddział | typ umowy | wynagrodzenie brutto |
+|---|---|---|---|---|---|---|---:|
+| Szpital A | Jan Kowalski |  | radiologia i diagnostyka obrazowa | lekarz specjalista | Zakład Diagnostyki Obrazowej | kontrakt | 1 245 300,00 zł |
+| Szpital B |  | A.B. | choroby wewnętrzne | starszy asystent | Oddział Chorób Wewnętrznych | umowa o pracę | 684 250,40 zł |
+| Szpital C | Anna Nowak |  |  | lekarz w trakcie specjalizacji | SOR | umowa zlecenia | 312 800,00 zł |
+| Szpital D |  | K.M. | anestezjologia i intensywna terapia | lekarz specjalista | OAiIT |  | 958 410,75 zł |
 
-Parser obsługuje również szczególne formaty, które pojawiały się w danych: miesięczne zestawienia wymagające agregacji do roku, wielokolumnowe formy zatrudnienia, informacje o umowie z kontekstu załącznika, specjalizacje i oddziały wynikające z układu dokumentu oraz anonimizację za pomocą inicjałów.
+To tylko przykład struktury wyniku — wartości i dane osobowe w tabeli powyżej są przykładowe. W rzeczywistych danych część pól może być pusta, jeżeli placówka nie podała danej informacji albo nie da się jej wiarygodnie wywnioskować z dokumentu.
+
+Oprócz pól pokazanych wyżej wynik zawiera także identyfikatory sprawy i placówki, kwotę netto, numer strony, nazwę użytego parsera, poziom pewności, surowy wiersz źródłowy i komentarz techniczny.
+
+## Szybki start — jak wygenerować bazę
+
+Projekt wymaga **Python 3.11+** i **Poetry**. Po sklonowaniu lub rozpakowaniu repozytorium wejdź do jego katalogu i zainstaluj projekt:
+
+```bash
+poetry env use python3.11   # opcjonalnie, jeśli domyślny Python jest starszy niż 3.11
+poetry install
+```
+
+Następnie uruchom parser, podając ścieżkę do źródłowej bazy `fedrowanie.db`:
+
+```bash
+poetry run fedrowanie-parser /sciezka/do/fedrowanie.db
+```
+
+Przykład, jeśli baza znajduje się w sąsiednim repozytorium:
+
+```bash
+poetry run fedrowanie-parser ../fedrowanie/data/fedrowanie.db
+```
+
+Można też uruchomić ten sam kod jako moduł Pythona:
+
+```bash
+poetry run python -m fedrowanie_parser.cli ../fedrowanie/data/fedrowanie.db
+```
+
+Bez dodatkowych argumentów parser zapisze wyniki w bieżącym katalogu zgodnie z domyślnymi nazwami CLI. Jeśli chcesz jawnie kontrolować lokalizację wszystkich wyników:
+
+```bash
+mkdir -p output
+
+poetry run fedrowanie-parser ../fedrowanie/data/fedrowanie.db \
+  --out-db output/fedrowanie_wynagrodzenia_2025.db \
+  --rows-csv output/wynagrodzenia_lekarzy_2025.csv \
+  --summary-csv output/podsumowanie_placowek_2025.csv
+```
+
+Najważniejszym artefaktem jest `--out-db`: jest to wynikowa baza SQLite zawierająca wyparsowane dane. Dwa pliki CSV są wygodnymi eksportami tabeli szczegółowej i podsumowania.
+
+> Samo `poetry run ...` na świeżo pobranym repozytorium nie wystarczy. Najpierw wykonaj `poetry install`, aby pakiet `fedrowanie_parser` został zainstalowany w środowisku Poetry.
 
 ## Jak działa parser — high level
 
@@ -123,9 +163,12 @@ Kod parsera korzysta wyłącznie z biblioteki standardowej Pythona. `pytest` jes
 
 ## Instalacja
 
+Pełny przykład uruchomienia znajduje się w sekcji **Szybki start** na początku README.
+
 ```bash
 git clone <URL_REPOZYTORIUM>
 cd fedrowanie-parser
+poetry env use python3.11   # opcjonalnie
 poetry install
 ```
 
