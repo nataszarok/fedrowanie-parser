@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-
 @dataclass
 class SalaryRow:
     case_pk: int
@@ -18,12 +17,11 @@ class SalaryRow:
     parser: str
     pewnosc: str
     raw_row: str
-    komentarz: str = ""
-    jednostka_oddzial: str = ""
-    imie_nazwisko: str = ""
-    stanowisko_status: str = ""
-    inicjaly: str = ""
-
+    komentarz: str = ''
+    jednostka_oddzial: str = ''
+    imie_nazwisko: str = ''
+    stanowisko_status: str = ''
+    inicjaly: str = ''
 
 @dataclass(frozen=True)
 class SourceCase:
@@ -53,3 +51,4 @@ class ExtractionResult:
 
     rows: list[SalaryRow]
     statuses: list[CaseParseStatus]
+

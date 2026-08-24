@@ -11,10 +11,10 @@ from typing import Iterable
 from ..models import SalaryRow
 
 
+
 __all__ = [
     "validate_case_rows",
 ]
-
 
 def validate_case_rows(rows: Iterable[SalaryRow]) -> list[SalaryRow]:
     """Materialize case rows and validate required identifiers."""
@@ -23,3 +23,4 @@ def validate_case_rows(rows: Iterable[SalaryRow]) -> list[SalaryRow]:
         if row.case_pk is None or row.institution_pk is None:
             raise ValueError("SalaryRow requires case_pk and institution_pk.")
     return materialized
+

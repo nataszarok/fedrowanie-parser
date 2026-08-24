@@ -22,16 +22,13 @@ __all__ = [
     "main",
 ]
 
-
 def main() -> None:
     """Run the CLI: parse arguments, extract rows, and write SQLite/CSV outputs."""
     ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "db", nargs="?", default="fedrowanie.db", help="wejściowa baza SQLite"
-    )
-    ap.add_argument("--out-db", default="fedrowanie_wynagrodzenia_2025.db")
-    ap.add_argument("--rows-csv", default="wynagrodzenia_lekarzy_2025.csv")
-    ap.add_argument("--summary-csv", default="podsumowanie_placowek_2025.csv")
+    ap.add_argument('db', nargs='?', default='fedrowanie.db', help='wejściowa baza SQLite')
+    ap.add_argument('--out-db', default='fedrowanie_wynagrodzenia_2025.db')
+    ap.add_argument('--rows-csv', default='wynagrodzenia_lekarzy_2025.csv')
+    ap.add_argument('--summary-csv', default='podsumowanie_placowek_2025.csv')
     args = ap.parse_args()
     src = Path(args.db)
     out_db = Path(args.out_db)
@@ -45,16 +42,19 @@ def main() -> None:
     write_summary(con)
     write_extracted_csv(con, Path(args.rows_csv))
     write_summary_csv(con, Path(args.summary_csv))
-    institution_count = len({(row.institution_pk, row.placowka) for row in result.rows})
+    institution_count = len({
+        (row.institution_pk, row.placowka)
+        for row in result.rows
+    })
     print(
-        f"Zapisano {len(result.rows):,} rekordów z {institution_count} placówek.".replace(
-            ",", " "
-        )
+        f'Zapisano {len(result.rows):,} rekordów z {institution_count} placówek.'
+        .replace(',', ' ')
     )
-    print(f"DB: {out_db}")
-    print(f"CSV: {args.rows_csv}")
-    print(f"Podsumowanie: {args.summary_csv}")
+    print(f'DB: {out_db}')
+    print(f'CSV: {args.rows_csv}')
+    print(f'Podsumowanie: {args.summary_csv}')
     con.close()
+
 
 
 if __name__ == "__main__":
