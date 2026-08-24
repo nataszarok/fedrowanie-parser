@@ -108,3 +108,30 @@ strict public/private boundary.
 
 Constants are always imported explicitly by name. This improves static analysis
 and IDE support (e.g. VS Code/Pylance) and avoids hidden dependencies.
+
+## Source repository boundary
+
+`pipeline.py` does not know the SQLite source schema. The `io/source_repository.py`
+module owns the join across `case_pages`, `cases`, and `institutions`, assembles
+`SourceCase` objects, and persists case-level diagnostics.
+
+The pipeline operates only on domain models (`SourceCase`, `SalaryRow`,
+`CaseParseStatus`, `ExtractionResult`). This keeps SQL and database-schema
+knowledge out of extraction logic.
+
+## Output persistence flow
+
+The CLI exposes the three SQLite outputs explicitly:
+
+```text
+ExtractionResult.statuses -> write_case_statuses() -> salaries_case_status
+
+ExtractionResult.rows -> write_extracted_rows() -> salaries_extracted
+salaries_extracted -> write_summary() -> salaries_summary
+
+salaries_extracted -> write_extracted_csv()
+salaries_summary -> write_summary_csv()
+```
+
+`source_repository.py` is read-only and only assembles `SourceCase` objects.
+`storage.py` owns all writes and each public function performs one visible output step.

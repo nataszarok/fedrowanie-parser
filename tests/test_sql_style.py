@@ -6,7 +6,9 @@ import re
 from pathlib import Path
 
 PKG = Path(__file__).parents[1] / "src" / "fedrowanie_parser"
-SQL_RE = re.compile(r"\\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|PRAGMA)\\b", re.I)
+SQL_RE = re.compile(
+    r"\\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|PRAGMA)\\b", re.I
+)
 
 
 def test_multiline_sql_uses_triple_quotes():
