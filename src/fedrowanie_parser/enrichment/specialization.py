@@ -3,10 +3,7 @@
 
 from __future__ import annotations
 
-from ..constants import (
-    SPECIALIZATION_PATTERNS,
-    SPECIALIZATION_GENERIC_ONLY_RE,
-)
+from ..constants import SPECIALIZATION_PATTERNS
 import re
 
 

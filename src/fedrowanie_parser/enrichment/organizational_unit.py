@@ -7,7 +7,6 @@ from ..constants import (
     ORGANIZATIONAL_UNIT_RE,
     ORGANIZATIONAL_CONTACT_RE,
     ORGANIZATIONAL_MONEY_RE,
-    ORGANIZATIONAL_ROLE_RE,
 )
 import re
 

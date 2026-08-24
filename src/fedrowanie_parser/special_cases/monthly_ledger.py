@@ -17,7 +17,7 @@ import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, asdict
 from difflib import SequenceMatcher
-from pathlib import Path
+
 from typing import Iterable, Optional
 
 # Generic monthly ledger row:
