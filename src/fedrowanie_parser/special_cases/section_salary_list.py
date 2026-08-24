@@ -1,5 +1,12 @@
+"""Parse salary lists grouped by organizational section headings."""
+
 
 from __future__ import annotations
+
+from ..constants import (
+    SECTION_SALARY_UNIT_PREFIX_RE,
+    SECTION_SALARY_ITEM_START_RE,
+)
 import re
 from dataclasses import dataclass
 
@@ -11,16 +18,81 @@ class SectionSalaryItem:
     unit: str
     raw_row: str
 
-UNIT_PREFIX_RE=re.compile(
-    r'(?i)^(?:oddzia[łl]|pododdzia[łl]|klinika|pracownia|poradni\w*|'
-    r'SOR\b|izba przyj[ęe][ćc]|zak[łl]ad|o[śs]rodek)\b'
-)
 
-ITEM_START_RE=re.compile(
-    r'(?i)^\s*(?P<idx>\d+|[lI])\.\s*(?P<role>lekarz[^—\-|]*?|'
-    r'lek\.?[^—\-|]*?|specjalista[^—\-|]*?|asystent[^—\-|]*?|rezydent[^—\-|]*?)\s*'
-    r'(?:—|-)\s*(?P<amount>.+?)\s*$'
-)
+
+
+__all__ = [
+    "parse_section_salary_list",
+]
+
+def parse_section_salary_list(doc):
+    """
+    Parse documents of the shape:
+      Oddział X:
+      1. lekarz ... — 123 456,78 zł
+      2. lekarz ... — ...
+      Oddział Y:
+      ...
+
+    Supports page breaks, OCR-bracket digits and "l." read instead of "1.".
+    Conservative activation requires multiple sections and many salary items.
+    """
+    lines=str(doc or '').splitlines()
+    current=''
+    provisional=[]
+    heading_positions=[]
+    seen_items=0
+
+    for i,line in enumerate(lines):
+        s=_norm(line)
+        if not s:
+            continue
+        # Ignore synthetic page markers.
+        if re.search(r'(?i)(?:początek|koniec) strony',s):
+            continue
+
+        m=SECTION_SALARY_ITEM_START_RE.match(s)
+        if m and _looks_like_amount_tail(m.group('amount')):
+            amount=_parse_amount(m.group('amount'))
+            if amount is not None and current:
+                idx_raw=m.group('idx')
+                idx=1 if idx_raw.lower()=='l' or idx_raw=='I' else int(idx_raw)
+                provisional.append(SectionSalaryItem(
+                    index=idx,
+                    role=_norm(m.group('role')),
+                    amount=amount,
+                    unit=current,
+                    raw_row=s,
+                ))
+                seen_items+=1
+            continue
+
+        # Explicit headings with colon or recognized organizational prefix.
+        s_no_pipe=s.rstrip('|').strip()
+        explicit_colon=str(line).strip().rstrip('|').strip().endswith(':')
+        if SECTION_SALARY_UNIT_PREFIX_RE.search(s_no_pipe):
+            current=s_no_pipe.rstrip(':').strip()
+            heading_positions.append((i,current))
+            continue
+
+        # Plain headings such as "Pracownia TK i RTG" are covered above.
+        # Unknown OCR heading is accepted only once the list is already active
+        # and the following nonempty line is a numbered doctor item.
+        if current and _is_heading_line(s_no_pipe):
+            nxt=''
+            for j in range(i+1,min(i+5,len(lines))):
+                z=_norm(lines[j])
+                if z and not re.search(r'(?i)(?:początek|koniec) strony',z):
+                    nxt=z; break
+            if SECTION_SALARY_ITEM_START_RE.match(nxt):
+                current=s_no_pipe.rstrip(':').strip()
+                heading_positions.append((i,current))
+
+    units={x.unit for x in provisional}
+    # Generic activation guard.
+    if len(provisional)<15 or len(units)<3:
+        return []
+    return provisional
 
 def _norm(s):
     return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip(' |#*_-–—:\t\r\n')
@@ -61,7 +133,7 @@ def _is_heading_line(s):
     s=_norm(s)
     if not s or len(s)>220:
         return False
-    if UNIT_PREFIX_RE.search(s):
+    if SECTION_SALARY_UNIT_PREFIX_RE.search(s):
         return True
     # Inside an already activated sectioned salary list, tolerate a short
     # standalone OCR heading (e.g. "N$oZ") if it has no amount/doctor item.
@@ -69,71 +141,3 @@ def _is_heading_line(s):
         return True
     return False
 
-def parse_section_salary_list(doc):
-    """
-    Parse documents of the shape:
-      Oddział X:
-      1. lekarz ... — 123 456,78 zł
-      2. lekarz ... — ...
-      Oddział Y:
-      ...
-
-    Supports page breaks, OCR-bracket digits and "l." read instead of "1.".
-    Conservative activation requires multiple sections and many salary items.
-    """
-    lines=str(doc or '').splitlines()
-    current=''
-    provisional=[]
-    heading_positions=[]
-    seen_items=0
-
-    for i,line in enumerate(lines):
-        s=_norm(line)
-        if not s:
-            continue
-        # Ignore synthetic page markers.
-        if re.search(r'(?i)(?:początek|koniec) strony',s):
-            continue
-
-        m=ITEM_START_RE.match(s)
-        if m and _looks_like_amount_tail(m.group('amount')):
-            amount=_parse_amount(m.group('amount'))
-            if amount is not None and current:
-                idx_raw=m.group('idx')
-                idx=1 if idx_raw.lower()=='l' or idx_raw=='I' else int(idx_raw)
-                provisional.append(SectionSalaryItem(
-                    index=idx,
-                    role=_norm(m.group('role')),
-                    amount=amount,
-                    unit=current,
-                    raw_row=s,
-                ))
-                seen_items+=1
-            continue
-
-        # Explicit headings with colon or recognized organizational prefix.
-        s_no_pipe=s.rstrip('|').strip()
-        explicit_colon=str(line).strip().rstrip('|').strip().endswith(':')
-        if UNIT_PREFIX_RE.search(s_no_pipe):
-            current=s_no_pipe.rstrip(':').strip()
-            heading_positions.append((i,current))
-            continue
-
-        # Plain headings such as "Pracownia TK i RTG" are covered above.
-        # Unknown OCR heading is accepted only once the list is already active
-        # and the following nonempty line is a numbered doctor item.
-        if current and _is_heading_line(s_no_pipe):
-            nxt=''
-            for j in range(i+1,min(i+5,len(lines))):
-                z=_norm(lines[j])
-                if z and not re.search(r'(?i)(?:początek|koniec) strony',z):
-                    nxt=z; break
-            if ITEM_START_RE.match(nxt):
-                current=s_no_pipe.rstrip(':').strip()
-                heading_positions.append((i,current))
-
-    units={x.unit for x in provisional}
-    # Generic activation guard.
-    if len(provisional)<15 or len(units)<3:
-        return []
-    return provisional

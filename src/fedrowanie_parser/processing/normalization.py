@@ -1,95 +1,87 @@
 """Shared normalization, money parsing, regexes and semantic helpers."""
 from __future__ import annotations
 
-from ..constants import *
-import argparse
-import csv
+from ..constants import (
+    YEAR,
+    PAGE_RE,
+    MONEY_TOKEN,
+    DATE_RE,
+    ISO_DATE_RE,
+    PHONEISH_RE,
+    SUMMARY_RE,
+    PERSON_TOTAL_RE,
+    YEAR_OTHER_RE,
+    CONTRACT_PATTERNS,
+    NET_RE,
+    GROSS_RE,
+    SPECIALIZATION_WORDS,
+    MONTH_NAME_RE,
+    THREAD_DATE_RE,
+    AUTO_REPLY_RE,
+    REQUESTER_SENDER_RE,
+    QUOTE_CUT_PATTERNS,
+    PARSER_RANK,
+    STRUCTURED_METADATA_PARSERS,
+    TOPN_WORD_RE,
+    SECTION_SALARY_UNIT_PREFIX_RE,
+    SECTION_SALARY_ITEM_START_RE,
+    MULTI_CONTRACT_MONEY_RE,
+    MONTHLY_LEDGER_ROW_RE,
+    MONTHLY_LEDGER_HEADER_RE,
+    MONTHLY_LEDGER_PROF_PREFIX_RE,
+    MONTHLY_LEDGER_BUSINESS_RE,
+    ATTACHMENT_CONTRACT_ATTACHMENT_RE,
+    ATTACHMENT_CONTRACT_PATTERNS,
+    DOCTOR_INITIALS_MONEY_RE,
+    DOCTOR_INITIALS_HEADER_RE,
+    DOCTOR_INITIALS_SURNAME_HEADER_RE,
+    DOCTOR_INITIALS_FIRST_HEADER_RE,
+    CONTRACT_SEMANTIC_PRACTICE_RE,
+    UNIT_COLUMN_HEADER_RE,
+    UNIT_COLUMN_HEADER_LIKE_RE,
+    UNIT_COLUMN_MONEY_RE,
+    UNIT_COLUMN_SECTION_HEADING_RE,
+    UNIT_COLUMN_SALARY_ITEM_RE,
+    ORGANIZATIONAL_UNIT_RE,
+    ORGANIZATIONAL_CONTACT_RE,
+    ORGANIZATIONAL_MONEY_RE,
+    ORGANIZATIONAL_ROLE_RE,
+    PERSON_NAME_HEADER_RE,
+    PERSON_NAME_MONEY_RE,
+    PERSON_NAME_BAD_RE,
+    PERSON_NAME_TOKEN_RE,
+    SPECIALIZATION_PATTERNS,
+    SPECIALIZATION_GENERIC_ONLY_RE,
+    DOCTOR_STATUS_PATTERNS,
+    DOCTOR_STATUS_GENERIC_ID_RE,
+)
 import re
-import shutil
-import sqlite3
-from pathlib import Path
-from typing import Iterable, Optional
-
-try:
-    from ..special_cases.monthly_ledger import (
-        parse_monthly_ledger,
-        aggregate_transactions,
-        merge_local_person_variants,
-    )
-except ImportError:
-    parse_monthly_ledger = None
-    aggregate_transactions = None
-    merge_local_person_variants = None
-
-try:
-    from ..enrichment.attachment_contract import contract_zones, match_row_to_zone
-except ImportError:
-    contract_zones = None
-    match_row_to_zone = None
-
-try:
-    from ..special_cases.multi_contract_columns import infer_contract_from_multi_columns, split_multi_contract_amounts, expand_stacked_contract_headers, document_multi_contract_row_map
-except ImportError:
-    infer_contract_from_multi_columns = None
-    split_multi_contract_amounts = None
-    expand_stacked_contract_headers = None
-    document_multi_contract_row_map = None
-
-try:
-    from ..enrichment.contract_semantic import infer_contract_from_record_and_section
-except ImportError:
-    infer_contract_from_record_and_section = None
-
-try:
-    from ..enrichment.organizational_unit import infer_unit_and_specialization
-except ImportError:
-    infer_unit_and_specialization = None
-
-try:
-    from ..enrichment.specialization import infer_specialization_from_raw_row
-except ImportError:
-    infer_specialization_from_raw_row = None
-
-try:
-    from ..enrichment.unit_column import (
-        document_unit_row_map,
-        document_unit_index_amount_map,
-        shifted_row_unit_candidate,
-        section_unit_map,
-        inline_ocr_section_unit,
-    )
-except ImportError:
-    document_unit_row_map = None
-    document_unit_index_amount_map = None
-    shifted_row_unit_candidate = None
-    section_unit_map = None
-    inline_ocr_section_unit = None
-
-try:
-    from ..special_cases.section_salary_list import parse_section_salary_list
-except ImportError:
-    parse_section_salary_list = None
-
-try:
-    from ..enrichment.person_name import document_person_name_maps, infer_person_name
-except ImportError:
-    document_person_name_maps = None
-    infer_person_name = None
-
-try:
-    from ..enrichment.doctor_status import extract_status
-except ImportError:
-    extract_status = None
-
-try:
-    from ..enrichment.doctor_initials import document_initial_maps, infer_initials_from_row
-except ImportError:
-    document_initial_maps = None
-    infer_initials_from_row = None
-
-
+from typing import Optional
 
 from ..models import SalaryRow
+
+
+__all__ = [
+    "norm_space",
+    "parse_money",
+    "money_cells",
+    "money_values",
+    "is_metadata_or_date",
+    "mentions_other_year",
+    "is_summary_row",
+    "detect_contract",
+    "amount_kind",
+    "clean_header",
+    "split_markdown_row",
+    "split_md_row",
+    "is_separator_row",
+    "header_has_money_context",
+    "infer_name_and_spec",
+    "parse_idx",
+    "label_for_row",
+    "table_should_be_excluded",
+    "semantic_annual_salary_columns",
+]
 
 def norm_space(s: str) -> str:
     """Normalize whitespace and non-breaking spaces in source text."""
@@ -286,4 +278,5 @@ def semantic_annual_salary_columns(headers: list[str]) -> tuple[int | None, int 
     amount = next((i for i, h in enumerate(hs) if re.search('(?i)wynagrodzenie.*brutto.*2025|brutto.*2025.*wynagrodzenie', h)), None)
     person = next((i for i, h in enumerate(hs) if re.search('(?i)stanowisko|lekarz|osoba|kod anonimowy|nazwa', h) and i != amount), None)
     return (lp, amount, person)
+
 

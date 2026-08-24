@@ -1,10 +1,32 @@
 """Vertical parser family."""
 from __future__ import annotations
 
+import re
+
 from typing import Optional
 
 from ...models import SalaryRow
-from ...processing.normalization import *
+from ...processing.normalization import (
+    norm_space,
+    parse_money,
+    money_cells,
+    money_values,
+    is_metadata_or_date,
+    mentions_other_year,
+    is_summary_row,
+    detect_contract,
+    amount_kind,
+    clean_header,
+    split_markdown_row,
+    split_md_row,
+    is_separator_row,
+    header_has_money_context,
+    infer_name_and_spec,
+    parse_idx,
+    label_for_row,
+    table_should_be_excluded,
+    semantic_annual_salary_columns,
+)
 
 __all__ = [
     "parse_vertical_label_amount_pairs",
@@ -18,6 +40,7 @@ __all__ = [
     "parse_parallel_doctor_amount_lists",
     "parse_anonymous_amount_only_series",
 ]
+
 
 
 def parse_vertical_label_amount_pairs(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str, inherited_contract: str='') -> list[SalaryRow]:
@@ -354,4 +377,5 @@ def parse_anonymous_amount_only_series(case_pk, institution_pk, placowka, page_n
             page_no,"anonymous-amount-only-series","wysoka",raw
         ))
     return out
+
 

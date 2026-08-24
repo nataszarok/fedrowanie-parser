@@ -1,29 +1,30 @@
+"""Recover organizational units from explicit table columns and section headings."""
+
 
 from __future__ import annotations
+
+from ..constants import (
+    UNIT_COLUMN_HEADER_RE,
+    UNIT_COLUMN_HEADER_LIKE_RE,
+    UNIT_COLUMN_MONEY_RE,
+    UNIT_COLUMN_SECTION_HEADING_RE,
+    UNIT_COLUMN_SALARY_ITEM_RE,
+)
 import re
 from typing import Optional
 
-def _norm(s):
-    return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip(' |#*_-–—:\t\r\n')
 
-UNIT_HEADER_RE = re.compile(
-    r'(?i)^(?:'
-    r'nazwa\s+kom[oó]rki\s+organizacyjnej|'
-    r'kom[oó]rka\s+organizacyjna|'
-    r'oddzia[łl](?:/o[śs]rodek/poradnia)?|'
-    r'klinika|poradnia|pracownia|o[śs]rodek|'
-    r'jednostka(?:\s+organizacyjna)?|'
-    r'miejsce\s+udzielania\s+[śs]wiadcze[ńn]|'
-    r'miejsce\s+zatrudnienia'
-    r')$'
-)
-
-HEADER_LIKE_RE = re.compile(
-    r'(?i)\b(?:lp\.?|l\.p\.?|nazwisko|imi[ęe]|wynagrodzeni\w*|kwota|'
-    r'forma zatrudn\w*|rodzaj umowy|etat|stanowisko|uwagi|okres)\b'
-)
-
-MONEY_RE = re.compile(r'-?\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{2})|-?\d{4,9}(?:[,.]\d{2})')
+__all__ = [
+    "split_markdown_row",
+    "is_separator_row",
+    "unit_column_indexes",
+    "clean_unit_value",
+    "document_unit_row_map",
+    "section_unit_map",
+    "inline_ocr_section_unit",
+    "document_unit_index_amount_map",
+    "shifted_row_unit_candidate",
+]
 
 def split_markdown_row(line:str)->list[str]:
     """Split a Markdown table row into normalized cells."""
@@ -43,7 +44,7 @@ def unit_column_indexes(headers:list[str])->list[int]:
     out=[]
     for i,h in enumerate(headers):
         h=_norm(h)
-        if UNIT_HEADER_RE.fullmatch(h):
+        if UNIT_COLUMN_HEADER_RE.fullmatch(h):
             out.append(i)
     return out
 
@@ -52,9 +53,9 @@ def clean_unit_value(v:str)->str:
     s=_norm(v)
     if not s:
         return ''
-    if HEADER_LIKE_RE.search(s):
+    if UNIT_COLUMN_HEADER_LIKE_RE.search(s):
         return ''
-    if MONEY_RE.fullmatch(s):
+    if UNIT_COLUMN_MONEY_RE.fullmatch(s):
         return ''
     return s
 
@@ -80,7 +81,7 @@ def document_unit_row_map(doc:str):
             continue
 
         # Any new table header without a unit column resets old state.
-        if any(HEADER_LIKE_RE.search(c or '') for c in cells) and not any(
+        if any(UNIT_COLUMN_HEADER_LIKE_RE.search(c or '') for c in cells) and not any(
             re.fullmatch(r'\d+',c or '') for c in cells[:2]
         ):
             headers=cells
@@ -95,7 +96,7 @@ def document_unit_row_map(doc:str):
         # positions that still exist instead of requiring exact row width.
         if not (
             any(re.fullmatch(r'\d+',c) for c in cells[:2])
-            or any(MONEY_RE.search(c or '') for c in cells)
+            or any(UNIT_COLUMN_MONEY_RE.search(c or '') for c in cells)
         ):
             continue
 
@@ -115,19 +116,6 @@ def document_unit_row_map(doc:str):
         out[key]=unit
     return out
 
-SECTION_HEADING_RE = re.compile(
-    r'(?i)^(?P<unit>'
-    r'(?:oddzia[łl]|pododdzia[łl]|klinika|pracownia|poradnia|'
-    r'szpitalny oddzia[łl] ratunkowy|SOR|izba przyj[ęe][ćc]|'
-    r'zak[łl]ad|o[śs]rodek)'
-    r'[^:\n]{0,170}'
-    r'):\s*$'
-)
-
-SALARY_ITEM_RE = re.compile(
-    r'(?i)^\s*\d+\.\s*(?:lekarz|lek\.?|dr\b|specjalista|asystent|rezydent)'
-)
-
 def section_unit_map(doc:str):
     """
     Stateful plain-text/OCR section parser:
@@ -145,12 +133,12 @@ def section_unit_map(doc:str):
         if not s:
             continue
 
-        m=SECTION_HEADING_RE.fullmatch(s)
+        m=UNIT_COLUMN_SECTION_HEADING_RE.fullmatch(s)
         if m:
             current=_norm(m.group('unit'))
             continue
 
-        if current and SALARY_ITEM_RE.search(s):
+        if current and UNIT_COLUMN_SALARY_ITEM_RE.search(s):
             out[s]=current
             continue
 
@@ -181,20 +169,6 @@ def inline_ocr_section_unit(raw_row:str)->Optional[str]:
         return _norm(matches[-1].group('unit'))
     return None
 
-
-def _money_value(cell):
-    s=str(cell or '').replace('\xa0',' ').strip()
-    m=re.search(r'-?\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{2})|-?\d{4,9}(?:[,.]\d{2})',s)
-    if not m:
-        return None
-    t=m.group(0).replace(' ','')
-    if ',' in t:
-        t=t.replace('.','').replace(',','.')
-    try:
-        return round(float(t),2)
-    except ValueError:
-        return None
-
 def document_unit_index_amount_map(doc:str):
     """
     Robust provenance map keyed by (row index, salary amount).
@@ -215,7 +189,7 @@ def document_unit_index_amount_map(doc:str):
             continue
 
         idxs=unit_column_indexes(cells)
-        headerish=any(HEADER_LIKE_RE.search(c or '') for c in cells)
+        headerish=any(UNIT_COLUMN_HEADER_LIKE_RE.search(c or '') for c in cells)
 
         if idxs:
             headers=cells
@@ -260,7 +234,6 @@ def document_unit_index_amount_map(doc:str):
 
     return out
 
-
 def shifted_row_unit_candidate(raw_row:str):
     """
     For synthetic continuation rows produced from a source row with two salary
@@ -279,8 +252,25 @@ def shifted_row_unit_candidate(raw_row:str):
             continue
         if _money_value(c) is not None:
             continue
-        if HEADER_LIKE_RE.search(c):
+        if UNIT_COLUMN_HEADER_LIKE_RE.search(c):
             continue
         vals.append(c)
     vals=list(dict.fromkeys(vals))
     return vals[0] if len(vals)==1 else ''
+
+def _norm(s):
+    return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip(' |#*_-–—:\t\r\n')
+
+def _money_value(cell):
+    s=str(cell or '').replace('\xa0',' ').strip()
+    m=re.search(r'-?\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{2})|-?\d{4,9}(?:[,.]\d{2})',s)
+    if not m:
+        return None
+    t=m.group(0).replace(' ','')
+    if ',' in t:
+        t=t.replace('.','').replace(',','.')
+    try:
+        return round(float(t),2)
+    except ValueError:
+        return None
+

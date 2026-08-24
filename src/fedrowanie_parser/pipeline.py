@@ -3,40 +3,66 @@ from __future__ import annotations
 import re
 import sqlite3
 from .models import SalaryRow
-from .services.case_extraction import validate_case_rows
-from .processing.normalization import *
-from .processing.document import (
-    split_pages,
-    page_is_2025_relevant,
-    suspicious_amount,
-    deduplicate,
-    classify_nonannual_response,
-    extract_recipient_messages,
-    correspondence_status,
-    is_metadata_context,
-    topn_comment,
-    filter_registry_capital_false_rows,
-    aggregate_count_total_guard,
-    is_correction_message,
-    prefer_latest_correction,
-    is_wrong_month,
-    recipient_document,
-    page_is_group_aggregate_salary_table,
+from .constants import (
+    GROSS_RE,
+    NET_RE,
+    PARSER_RANK,
+    STRUCTURED_METADATA_PARSERS,
+    YEAR,
 )
+from .services.case_extraction import validate_case_rows
+
+
+
+__all__ = [
+    "extract_all",
+]
+
+# Public package APIs are intentionally imported wholesale; each module defines __all__.
+from .processing.api import *
 from .parsing.tables import *
 from .parsing.layouts import *
 from .parsing.plain_text import *
-from .processing.document import (
-    topn_comment,
-    is_metadata_context,
-    filter_registry_capital_false_rows,
-    aggregate_count_total_guard,
-    is_correction_message,
-    prefer_latest_correction,
-    is_wrong_month,
-    recipient_document,
-    page_is_group_aggregate_salary_table,
-)
+from .enrichment.api import *
+from .special_cases.api import *
+
+def extract_all(con: sqlite3.Connection) -> list[SalaryRow]:
+    """Extract normalized salary rows from all eligible cases in the source database."""
+    con.row_factory = sqlite3.Row
+    query = """
+                SELECT cp.case_pk, cp.text, c.institution_pk,
+                       COALESCE(i.name, c.name, '') AS institution_name
+                FROM case_pages cp
+                LEFT JOIN cases c ON c.pk = cp.case_pk
+                LEFT JOIN institutions i ON i.pk = c.institution_pk
+                WHERE cp.text IS NOT NULL AND TRIM(cp.text) <> ''
+                ORDER BY cp.case_pk, cp.rowid
+
+            """
+    cases = {}
+    for r in con.execute(query):
+        b = cases.setdefault(r['case_pk'], [r['institution_pk'], r['institution_name'], []])
+        b[2].append(r['text'] or '')
+    accepted, statuses = ([], [])
+    for case_pk, (institution_pk, placowka, parts) in cases.items():
+        doc, meta = recipient_document('\n'.join(parts))
+        if not meta['thread_detected']:
+            statuses.append((case_pk, institution_pk, placowka, 'NO_SUBSTANTIVE_DATA_DETECTED', 'recipient_thread_not_detected', 0))
+            continue
+        if meta['substantive_recipient_messages'] == 0:
+            statuses.append((case_pk, institution_pk, placowka, 'NO_SUBSTANTIVE_DATA_DETECTED', 'no_substantive_recipient_reply', 0))
+            continue
+        rows = _case_rows(case_pk, institution_pk, placowka, doc)
+        comment = topn_comment(doc)
+        if comment:
+            for r in rows:
+                r.komentarz = comment
+        status, reason = correspondence_status(doc, rows)
+        if status.startswith('INDIVIDUAL_ANNUAL_2025'):
+            accepted.extend(rows)
+        statuses.append((case_pk, institution_pk, placowka, status, reason, len(rows)))
+    _store_case_status(con, statuses)
+    return accepted
 
 def _page_rows(case_pk, institution_pk, placowka, page_no, page, doc, inherited_contract, inherited_kind, inherited_spec):
     """Run the parser families applicable to one document page."""
@@ -540,32 +566,5 @@ def _store_case_status(con, rows):
 """, rows)
     con.commit()
 
-def extract_all(con: sqlite3.Connection) -> list[SalaryRow]:
-    """Extract normalized salary rows from all eligible cases in the source database."""
-    con.row_factory = sqlite3.Row
-    query = "\n        SELECT cp.case_pk, cp.text, c.institution_pk,\n               COALESCE(i.name, c.name, '') AS institution_name\n        FROM case_pages cp\n        LEFT JOIN cases c ON c.pk = cp.case_pk\n        LEFT JOIN institutions i ON i.pk = c.institution_pk\n        WHERE cp.text IS NOT NULL AND TRIM(cp.text) <> ''\n        ORDER BY cp.case_pk, cp.rowid\n    "
-    cases = {}
-    for r in con.execute(query):
-        b = cases.setdefault(r['case_pk'], [r['institution_pk'], r['institution_name'], []])
-        b[2].append(r['text'] or '')
-    accepted, statuses = ([], [])
-    for case_pk, (institution_pk, placowka, parts) in cases.items():
-        doc, meta = recipient_document('\n'.join(parts))
-        if not meta['thread_detected']:
-            statuses.append((case_pk, institution_pk, placowka, 'NO_SUBSTANTIVE_DATA_DETECTED', 'recipient_thread_not_detected', 0))
-            continue
-        if meta['substantive_recipient_messages'] == 0:
-            statuses.append((case_pk, institution_pk, placowka, 'NO_SUBSTANTIVE_DATA_DETECTED', 'no_substantive_recipient_reply', 0))
-            continue
-        rows = _case_rows(case_pk, institution_pk, placowka, doc)
-        comment = topn_comment(doc)
-        if comment:
-            for r in rows:
-                r.komentarz = comment
-        status, reason = correspondence_status(doc, rows)
-        if status.startswith('INDIVIDUAL_ANNUAL_2025'):
-            accepted.extend(rows)
-        statuses.append((case_pk, institution_pk, placowka, status, reason, len(rows)))
-    _store_case_status(con, statuses)
-    return accepted
+
 

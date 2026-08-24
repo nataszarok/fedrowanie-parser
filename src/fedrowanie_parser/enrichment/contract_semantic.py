@@ -1,14 +1,17 @@
+"""Infer contract semantics from row and section context."""
+
 
 from __future__ import annotations
+
+from ..constants import (
+    CONTRACT_SEMANTIC_PRACTICE_RE,
+)
 import re
 
-def _norm(s):
-    return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip()
 
-PRACTICE_RE=re.compile(
-    r'(?i)\b(?:indywidualna|prywatna|specjalistyczna)?\s*'
-    r'(?:specjalistyczna\s+)?praktyka\s+lekarska\b'
-)
+__all__ = [
+    "infer_contract_from_record_and_section",
+]
 
 def infer_contract_from_record_and_section(doc:str, raw_row:str):
     """
@@ -19,7 +22,7 @@ def infer_contract_from_record_and_section(doc:str, raw_row:str):
     strong section/list introducer immediately governing the record.
     """
     raw=_norm(raw_row)
-    if PRACTICE_RE.search(raw):
+    if CONTRACT_SEMANTIC_PRACTICE_RE.search(raw):
         return ('kontrakt/cywilnoprawna','praktyka lekarska w rekordzie')
 
     text=str(doc or '')
@@ -63,3 +66,7 @@ def infer_contract_from_record_and_section(doc:str, raw_row:str):
         return ('kontrakt/cywilnoprawna','świadczenia zdrowotne po postępowaniu konkursowym')
 
     return None
+
+def _norm(s):
+    return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip()
+

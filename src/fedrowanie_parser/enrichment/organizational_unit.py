@@ -1,17 +1,26 @@
+"""Separate organizational-unit context from physician specialization."""
+
 
 from __future__ import annotations
+
+from ..constants import (
+    ORGANIZATIONAL_UNIT_RE,
+    ORGANIZATIONAL_CONTACT_RE,
+    ORGANIZATIONAL_MONEY_RE,
+    ORGANIZATIONAL_ROLE_RE,
+)
 import re
 
-UNIT_RE = re.compile(
-    r'(?i)\b(?:pododdzia[łl]|oddzia[łl]|klinika|pracownia|poradnia|'
-    r'szpitalny oddzia[łl] ratunkowy|SOR\b|izba przyj[ęe][ćc]|'
-    r'nocna i [śs]wi[ąa]teczna opieka(?: zdrowotna| medyczna)?|'
-    r'o[śs]rodek rehabilitacji|zak[łl]ad\b|\bkl\.\s*|^o\.\s*)'
-)
-CONTACT_RE = re.compile(r'(?i)\b(?:tel\.?|fax|e-?mail|www\.|ul\.|telefon)\b')
-MONEY_RE = re.compile(r'\d{1,3}(?:[ .]\d{3})*[,.]\d{2}')
-ROLE_RE = re.compile(r'(?i)^(?:koordynator|zast[ęe]pca koordynatora|z-ca koordynatora|'
-                     r'ordynator|zast[ęe]pca ordynatora|kierownik|p\.?o\.?.*)$')
+
+
+__all__ = [
+    "norm",
+    "looks_like_unit",
+    "unit_from_raw_row",
+    "split_existing_specialization",
+    "section_unit_for_row",
+    "infer_unit_and_specialization",
+]
 
 def norm(s):
     """Normalize whitespace and punctuation in a text value."""
@@ -20,14 +29,14 @@ def norm(s):
 def looks_like_unit(s):
     """Return whether text plausibly names an organizational unit."""
     s=norm(s)
-    if not s or len(s)>180 or CONTACT_RE.search(s) or MONEY_RE.search(s):
+    if not s or len(s)>180 or ORGANIZATIONAL_CONTACT_RE.search(s) or ORGANIZATIONAL_MONEY_RE.search(s):
         return False
     if re.search(r'(?i)\b(?:lp\.?|l\.p\.?|wynagrodzeni\w*|forma zatrudn\w*|'
                  r'nazwisko|imi[ęe]|do kiedy zatrudniony|kwota)\b',s):
         return False
     if re.fullmatch(r'(?i)(?:lekarz\s+)?(?:kierownik|asystent|zast[ęe]pca|z-ca).*oddzia[łl]u',s):
         return False
-    return bool(UNIT_RE.search(s))
+    return bool(ORGANIZATIONAL_UNIT_RE.search(s))
 
 def unit_from_raw_row(raw):
     """Extract an organizational unit directly from a structured source row."""
@@ -39,7 +48,7 @@ def unit_from_raw_row(raw):
         if (
             re.fullmatch(r'(?i)lekarz\s+\d+',first)
             and second
-            and MONEY_RE.search(third)
+            and ORGANIZATIONAL_MONEY_RE.search(third)
             and re.fullmatch(r'(?i)(?:umowa zlecenia|umowa o prac[ęe]|kontrakt|cywilnoprawna)',fourth)
         ):
             return second
@@ -114,3 +123,4 @@ def infer_unit_and_specialization(doc, raw_row, existing_spec):
         return old_unit, cleaned_spec
     sec=section_unit_for_row(doc,raw_row)
     return sec, cleaned_spec
+

@@ -1,59 +1,18 @@
+"""Infer medical specialization from row-level textual context."""
+
 
 from __future__ import annotations
+
+from ..constants import (
+    SPECIALIZATION_PATTERNS,
+    SPECIALIZATION_GENERIC_ONLY_RE,
+)
 import re
 
-def _norm(s):
-    return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip(' |#*_-–—:\t\r\n')
 
-# Ordered from more specific to more generic.
-PATTERNS = [
-    ("radiologia i diagnostyka obrazowa", re.compile(r'(?i)\bradiologia\s+i\s+diagnostyka\s+obrazowa\b')),
-    ("radiologia", re.compile(r'(?i)\bradiolog(?:ia|ii|icz\w*|a|iem)?\b|\bradiodiagnost\w*\b')),
-    ("psychiatria dzieci i młodzieży", re.compile(r'(?i)\bpsychiatri\w+\s+dzieci\s+i\s+m[łl]odzie[żz]y\b')),
-    ("psychiatria", re.compile(r'(?i)\bpsychiatr\w*\b')),
-    ("anestezjologia i intensywna terapia", re.compile(r'(?i)\banestezjolog\w*(?:\s+i\s+intensywn\w+\s+terapi\w*)?\b')),
-    ("neurochirurgia", re.compile(r'(?i)\bneurochirurg\w*\b')),
-    ("hematologia", re.compile(r'(?i)\bhematolog\w*\b')),
-    ("chirurgia klatki piersiowej", re.compile(r'(?i)\bchirurg\w+\s+klatki\s+piersiow\w*\b')),
-    ("chirurgia naczyniowa", re.compile(r'(?i)\bchirurg\w+\s+naczyniow\w*\b')),
-    ("chirurgia ogólna", re.compile(r'(?i)\bchirurg\w+\s+og[oó]ln\w*\b')),
-    ("chirurgia", re.compile(r'(?i)\bchirurg\w*\b')),
-    ("kardiochirurgia", re.compile(r'(?i)\bkardiochirurg\w*\b')),
-    ("kardiologia", re.compile(r'(?i)\bkardiolog\w*\b')),
-    ("nefrologia", re.compile(r'(?i)\bnefrolog\w*\b')),
-    ("neurologia", re.compile(r'(?i)\bneurolog\w*\b')),
-    ("urologia", re.compile(r'(?i)\burolog\w*\b')),
-    ("okulistyka", re.compile(r'(?i)\bokulist\w*\b')),
-    ("otolaryngologia", re.compile(r'(?i)\botolaryngolog\w*|\blaryngolog\w*\b')),
-    ("pediatria", re.compile(r'(?i)\bpediatr\w*\b')),
-    ("ginekologia i położnictwo", re.compile(r'(?i)\b(?:ginekolog\w*.{0,20}po[łl]o[żz]nictw\w*|po[łl]o[żz]nictw\w*.{0,20}ginekolog\w*)\b')),
-    ("ginekologia", re.compile(r'(?i)\bginekolog\w*\b')),
-    ("choroby wewnętrzne", re.compile(r'(?i)\bchor[oó]b\w+\s+wewn[ęe]trzn\w*|\binternist\w*\b')),
-    ("medycyna rodzinna", re.compile(r'(?i)\bmedycyn\w+\s+rodzinn\w*\b')),
-    ("rehabilitacja medyczna", re.compile(r'(?i)\brehabilitacj\w+\s+medyczn\w*\b')),
-    ("rehabilitacja", re.compile(r'(?i)\brehabilitacj\w*\b')),
-    ("medycyna ratunkowa", re.compile(r'(?i)\bmedycyn\w+\s+ratunkow\w*\b')),
-    ("onkologia kliniczna", re.compile(r'(?i)\bonkolog\w+\s+kliniczn\w*\b')),
-    ("onkologia", re.compile(r'(?i)\bonkolog\w*\b')),
-    ("pulmonologia", re.compile(r'(?i)\bpulmonolog\w*\b|\bchor[oó]b\w+\s+p[łl]uc\b')),
-    ("dermatologia", re.compile(r'(?i)\bdermatolog\w*\b')),
-    ("endokrynologia", re.compile(r'(?i)\bendokrynolog\w*\b')),
-    ("ortopedia i traumatologia", re.compile(r'(?i)\bortoped\w*.{0,30}traumatolog\w*|\btraumatolog\w*.{0,30}ortoped\w*')),
-    ("ortopedia", re.compile(r'(?i)\bortoped\w*\b')),
-    ("medycyna paliatywna", re.compile(r'(?i)\bmedycyn\w+\s+paliatywn\w*\b')),
+__all__ = [
+    "infer_specialization_from_raw_row",
 ]
-
-GENERIC_ONLY = re.compile(
-    r'(?i)^(?:lekarz\s+)?(?:specjalista|lekarz specjalista|'
-    r'lekarz w trakcie specjalizacji|lekarz bez specjalizacji)$'
-)
-
-def _clean_candidate(raw):
-    s=_norm(raw)
-    # Remove obvious amount fragments / index cells, keep wording.
-    s=re.sub(r'\b\d{1,3}(?:[ .]\d{3})*[,.]\d{2}\s*(?:z[łl]|pln)?\b',' ',s,flags=re.I)
-    s=re.sub(r'^\s*\d+\s*\|\s*','',s)
-    return _norm(s)
 
 def infer_specialization_from_raw_row(raw_row, existing_spec='', organizational_unit=''):
     """
@@ -119,7 +78,7 @@ def infer_specialization_from_raw_row(raw_row, existing_spec='', organizational_
     else:
         return None
     hits=[]
-    for label,pat in PATTERNS:
+    for label,pat in SPECIALIZATION_PATTERNS:
         if pat.search(search_text):
             hits.append(label)
 
@@ -158,3 +117,14 @@ def infer_specialization_from_raw_row(raw_row, existing_spec='', organizational_
         # Preserve at most two strong explicit specialties.
         spec=" / ".join(hits[:2])
     return spec, f"specjalizacja z raw_row: {spec}"
+
+def _norm(s):
+    return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip(' |#*_-–—:\t\r\n')
+
+def _clean_candidate(raw):
+    s=_norm(raw)
+    # Remove obvious amount fragments / index cells, keep wording.
+    s=re.sub(r'\b\d{1,3}(?:[ .]\d{3})*[,.]\d{2}\s*(?:z[łl]|pln)?\b',' ',s,flags=re.I)
+    s=re.sub(r'^\s*\d+\s*\|\s*','',s)
+    return _norm(s)
+

@@ -10,6 +10,11 @@ from pathlib import Path
 from .pipeline import extract_all
 from .io.storage import write_csvs, write_sqlite
 
+
+__all__ = [
+    "main",
+]
+
 def main() -> None:
     """Run the CLI: parse arguments, extract rows, and write SQLite/CSV outputs."""
     ap = argparse.ArgumentParser()
@@ -32,6 +37,7 @@ def main() -> None:
     print(f'CSV: {args.rows_csv}')
     print(f'Podsumowanie: {args.summary_csv}')
     con.close()
+
 
 
 if __name__ == "__main__":

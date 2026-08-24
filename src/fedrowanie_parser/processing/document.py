@@ -1,10 +1,85 @@
 """Document segmentation, correspondence classification and row-quality filters."""
 from __future__ import annotations
 
-from ..constants import *
+import re
+
+from ..constants import (
+    YEAR,
+    PAGE_RE,
+    MONEY_TOKEN,
+    DATE_RE,
+    ISO_DATE_RE,
+    PHONEISH_RE,
+    SUMMARY_RE,
+    PERSON_TOTAL_RE,
+    YEAR_OTHER_RE,
+    CONTRACT_PATTERNS,
+    NET_RE,
+    GROSS_RE,
+    SPECIALIZATION_WORDS,
+    MONTH_NAME_RE,
+    THREAD_DATE_RE,
+    AUTO_REPLY_RE,
+    REQUESTER_SENDER_RE,
+    QUOTE_CUT_PATTERNS,
+    PARSER_RANK,
+    STRUCTURED_METADATA_PARSERS,
+    TOPN_WORD_RE,
+    SECTION_SALARY_UNIT_PREFIX_RE,
+    SECTION_SALARY_ITEM_START_RE,
+    MULTI_CONTRACT_MONEY_RE,
+    MONTHLY_LEDGER_ROW_RE,
+    MONTHLY_LEDGER_HEADER_RE,
+    MONTHLY_LEDGER_PROF_PREFIX_RE,
+    MONTHLY_LEDGER_BUSINESS_RE,
+    ATTACHMENT_CONTRACT_ATTACHMENT_RE,
+    ATTACHMENT_CONTRACT_PATTERNS,
+    DOCTOR_INITIALS_MONEY_RE,
+    DOCTOR_INITIALS_HEADER_RE,
+    DOCTOR_INITIALS_SURNAME_HEADER_RE,
+    DOCTOR_INITIALS_FIRST_HEADER_RE,
+    CONTRACT_SEMANTIC_PRACTICE_RE,
+    UNIT_COLUMN_HEADER_RE,
+    UNIT_COLUMN_HEADER_LIKE_RE,
+    UNIT_COLUMN_MONEY_RE,
+    UNIT_COLUMN_SECTION_HEADING_RE,
+    UNIT_COLUMN_SALARY_ITEM_RE,
+    ORGANIZATIONAL_UNIT_RE,
+    ORGANIZATIONAL_CONTACT_RE,
+    ORGANIZATIONAL_MONEY_RE,
+    ORGANIZATIONAL_ROLE_RE,
+    PERSON_NAME_HEADER_RE,
+    PERSON_NAME_MONEY_RE,
+    PERSON_NAME_BAD_RE,
+    PERSON_NAME_TOKEN_RE,
+    SPECIALIZATION_PATTERNS,
+    SPECIALIZATION_GENERIC_ONLY_RE,
+    DOCTOR_STATUS_PATTERNS,
+    DOCTOR_STATUS_GENERIC_ID_RE,
+)
 from typing import Optional
 from ..models import SalaryRow
-from .normalization import *
+from .normalization import (
+    norm_space,
+    parse_money,
+    money_cells,
+    money_values,
+    is_metadata_or_date,
+    mentions_other_year,
+    is_summary_row,
+    detect_contract,
+    amount_kind,
+    clean_header,
+    split_markdown_row,
+    split_md_row,
+    is_separator_row,
+    header_has_money_context,
+    infer_name_and_spec,
+    parse_idx,
+    label_for_row,
+    table_should_be_excluded,
+    semantic_annual_salary_columns,
+)
 
 # Document/correspondence constants retained from v35.
 
@@ -27,6 +102,7 @@ __all__ = [
     "recipient_document",
     "page_is_group_aggregate_salary_table",
 ]
+
 
 
 def split_pages(text: str) -> list[tuple[int, str]]:
@@ -391,4 +467,5 @@ def page_is_group_aggregate_salary_table(page: str) -> bool:
                 and re.search(r'(?i)łączna\s+kwota\s+wynagrodze[nń]|laczna\s+kwota\s+wynagrodze[nń]|suma\s+wynagrodze[nń]', h)):
             return True
     return False
+
 

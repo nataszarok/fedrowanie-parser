@@ -1,12 +1,40 @@
 """Structured Markdown/OCR table parsers."""
 from __future__ import annotations
+
+import re
 from typing import Optional
 from ..models import SalaryRow
-from ..processing.normalization import *
+from ..special_cases.multi_contract_columns import (
+    expand_stacked_contract_headers,
+    infer_contract_from_multi_columns,
+    split_multi_contract_amounts,
+)
+from ..processing.normalization import (
+    norm_space,
+    parse_money,
+    money_cells,
+    money_values,
+    is_metadata_or_date,
+    mentions_other_year,
+    is_summary_row,
+    detect_contract,
+    amount_kind,
+    clean_header,
+    split_markdown_row,
+    split_md_row,
+    is_separator_row,
+    header_has_money_context,
+    infer_name_and_spec,
+    parse_idx,
+    label_for_row,
+    table_should_be_excluded,
+    semantic_annual_salary_columns,
+)
 
 __all__ = [
     "parse_markdown_tables",
 ]
+
 
 
 def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str, inherited_contract: str='', inherited_kind: str='brutto', inherited_spec: str='') -> list[SalaryRow]:
@@ -267,4 +295,5 @@ def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka:
         if vals and vals[0][1] > 0:
             rows.append(SalaryRow(case_pk, institution_pk, placowka, norm_space(m.group('label')), '', current_contract, None, vals[0][1], page_no, 'markdown-empty-lp', 'wysoka', norm_space(raw)))
     return rows
+
 

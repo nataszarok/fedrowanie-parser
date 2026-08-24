@@ -1,14 +1,28 @@
+"""Extract physician full names from structured response tables."""
+
 from __future__ import annotations
+
+from ..constants import (
+    PERSON_NAME_HEADER_RE,
+    PERSON_NAME_MONEY_RE,
+    PERSON_NAME_BAD_RE,
+    PERSON_NAME_TOKEN_RE,
+)
 import re
+
+
+__all__ = [
+    "norm",
+    "split_row",
+    "money_value",
+    "looks_like_person_name",
+    "document_person_name_maps",
+    "infer_person_name",
+]
 
 def norm(s):
     """Normalize whitespace and punctuation in a text value."""
     return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip(' |#*_-–—:\t\r\n')
-
-NAME_HEADER_RE=re.compile(r'(?i)^(?:nazwisko\s+i\s+imi[ęe]|nazwisko\s+imi[ęe]|imi[ęe]\s+i\s+nazwisko|imi[ęe]\s+nazwisko|nazwisko(?:\s+lekarza)?|dane\s+lekarza)$')
-MONEY_RE=re.compile(r'-?\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{2})|-?\d{4,9}(?:[,.]\d{2})')
-BAD_RE=re.compile(r'(?i)\b(?:lekarz|specjalista|specjalizacja|asystent|rezydent|ordynator|koordynator|kierownik|zast[ęe]pca|oddzia[łl]|klinika|poradnia|pracownia|zak[łl]ad|o[śs]rodek|chirurg|ginekolog|pediatr|psychiatr|radiolog|kardiolog|neurolog|nefrolog|urolog|onkolog|anestez|medycyn|umowa|kontrakt|etat|wynagrodzenie|kwota|brutto|netto)\b')
-TOKEN_RE=re.compile(r"^[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźżÀ-ÖØ-öø-ÿ'’-]+$")
 
 def split_row(line):
     """Split a pipe-delimited source row into normalized cells."""
@@ -18,7 +32,7 @@ def split_row(line):
 
 def money_value(cell):
     """Parse a monetary value from a single table cell."""
-    m=MONEY_RE.search(str(cell or ''))
+    m=PERSON_NAME_MONEY_RE.search(str(cell or ''))
     if not m: return None
     t=m.group(0).replace(' ','')
     if ',' in t: t=t.replace('.','').replace(',','.')
@@ -28,10 +42,10 @@ def money_value(cell):
 def looks_like_person_name(s):
     """Return whether text plausibly contains a physician's full name."""
     s=norm(s)
-    if not s or len(s)>100 or BAD_RE.search(s) or any(ch.isdigit() for ch in s): return False
+    if not s or len(s)>100 or PERSON_NAME_BAD_RE.search(s) or any(ch.isdigit() for ch in s): return False
     toks=s.split()
     if not (2 <= len(toks) <= 5): return False
-    if not all(TOKEN_RE.fullmatch(t) for t in toks): return False
+    if not all(PERSON_NAME_TOKEN_RE.fullmatch(t) for t in toks): return False
     caps=sum(1 for t in toks if t[:1].isupper())
     upper=sum(1 for t in toks if t.upper()==t and any(c.isalpha() for c in t))
     return upper==len(toks) or caps==len(toks)
@@ -43,7 +57,7 @@ def document_person_name_maps(doc):
         cells=split_row(line)
         if not cells: continue
         if all((not c) or re.fullmatch(r':?-{3,}:?',c) for c in cells): continue
-        found=[i for i,c in enumerate(cells) if NAME_HEADER_RE.fullmatch(norm(c))]
+        found=[i for i,c in enumerate(cells) if PERSON_NAME_HEADER_RE.fullmatch(norm(c))]
         if found:
             name_idx=found[0]; continue
         if name_idx is not None and any(re.search(r'(?i)\b(?:lp\.?|wynagrodzeni\w*|kwota|specjalizacja|oddzia[łl]|klinika|poradnia|forma zatrudn\w*)\b',c) for c in cells) and not any(re.fullmatch(r'\d+',c) for c in cells[:2]):
@@ -74,3 +88,4 @@ def infer_person_name(raw_row, existing_spec='', unit=''):
     sp=norm(existing_spec)
     if looks_like_person_name(sp): return sp
     return ''
+

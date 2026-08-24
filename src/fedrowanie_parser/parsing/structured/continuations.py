@@ -1,10 +1,32 @@
 """Continuations parser family."""
 from __future__ import annotations
 
+import re
+
 from typing import Optional
 
 from ...models import SalaryRow
-from ...processing.normalization import *
+from ...processing.normalization import (
+    norm_space,
+    parse_money,
+    money_cells,
+    money_values,
+    is_metadata_or_date,
+    mentions_other_year,
+    is_summary_row,
+    detect_contract,
+    amount_kind,
+    clean_header,
+    split_markdown_row,
+    split_md_row,
+    is_separator_row,
+    header_has_money_context,
+    infer_name_and_spec,
+    parse_idx,
+    label_for_row,
+    table_should_be_excluded,
+    semantic_annual_salary_columns,
+)
 
 __all__ = [
     "page_context_contract",
@@ -15,6 +37,7 @@ __all__ = [
     "parse_parallel_index_amount_columns",
     "parse_vertical_idx_code_gross_net",
 ]
+
 
 
 def page_context_contract(lines: list[str], pos: int, fallback: str='') -> str:
@@ -215,4 +238,5 @@ def parse_vertical_idx_code_gross_net(case_pk, institution_pk, placowka, page_no
                 continue
         i += 1
     return out if len(out) >= 3 else []
+
 

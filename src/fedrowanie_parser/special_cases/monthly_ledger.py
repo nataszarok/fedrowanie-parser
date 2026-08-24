@@ -1,5 +1,14 @@
+"""Annualize monthly payment ledgers into physician remuneration totals."""
+
 
 from __future__ import annotations
+
+from ..constants import (
+    MONTHLY_LEDGER_ROW_RE,
+    MONTHLY_LEDGER_HEADER_RE,
+    MONTHLY_LEDGER_PROF_PREFIX_RE,
+    MONTHLY_LEDGER_BUSINESS_RE,
+)
 
 import argparse
 import csv
@@ -13,24 +22,9 @@ from typing import Iterable, Optional
 
 # Generic monthly ledger row:
 # | 01.01.2025 | Kowalski Jan | 12 345,67 |
-ROW_RE = re.compile(
-    r"\|\s*(\d{2}\.\d{2}\.(\d{4}))\s*\|\s*([^|]*)\|\s*"
-    r"(-?\d{1,3}(?:[ .]\d{3})*(?:,\d{2})|-?\d+,\d{2})\s*\|"
-)
 
-HEADER_RE = re.compile(
-    r"(?is)\|\s*Data\s+Dokumentu\s*\|\s*Podmiot\s*\|\s*Warto(?:s|ś)c\s*\|"
-)
 
-PROF_PREFIX_RE = re.compile(
-    r"(?i)^(?:(?:lek(?:arz)?|dr|prof|mgr)\.?\s*(?:med\.?)?\s+)"
-)
 
-BUSINESS_RE = re.compile(
-    r"(?i)\b(?:sp\.?\s*z\.?\s*o\.?\s*o\.?|spółka|spolka|s\.?c\.?|"
-    r"praktyka|gabinet|fizjoterapia|rehabilitacja|kingmed|medyczn\w*|"
-    r"nzoz|zoz|poradnia|centrum)\b"
-)
 
 @dataclass
 class LedgerTx:
@@ -53,6 +47,23 @@ class AnnualEntity:
     has_negative_correction: bool
     entity_kind: str
 
+
+__all__ = [
+    "parse_money_pl",
+    "clean_entity",
+    "canonical_entity",
+    "display_choice",
+    "classify_entity",
+    "parse_monthly_ledger",
+    "merge_local_person_variants",
+    "aggregate_transactions",
+    "aggregate_monthly_ledger",
+    "near_duplicate_candidates",
+    "read_case_text",
+    "write_csv",
+    "main",
+]
+
 def parse_money_pl(value: str) -> Optional[float]:
     """Parse a Polish-formatted monetary value into a decimal number."""
     s=(value or "").strip().replace("\xa0"," ").replace(" ","")
@@ -67,7 +78,7 @@ def clean_entity(value: str) -> str:
     s=" ".join((value or "").split()).strip(" \t.,;:|")
     # Strip only a complete professional prefix followed by whitespace.
     # This intentionally does NOT turn "Lekan" into "an".
-    s=PROF_PREFIX_RE.sub("",s)
+    s=MONTHLY_LEDGER_PROF_PREFIX_RE.sub("",s)
     return " ".join(s.split()).strip(" \t.,;:|")
 
 def canonical_entity(value: str) -> str:
@@ -95,7 +106,7 @@ def classify_entity(name: str) -> str:
     s=clean_entity(name)
     if not s:
         return "empty"
-    if BUSINESS_RE.search(s):
+    if MONTHLY_LEDGER_BUSINESS_RE.search(s):
         return "business_or_practice"
     toks=re.findall(r"[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźżÀ-ž'’.-]+",s)
     if len(toks)>=2:
@@ -106,10 +117,10 @@ def classify_entity(name: str) -> str:
 
 def parse_monthly_ledger(text: str, target_year: int=2025) -> list[LedgerTx]:
     """Parse monthly ledger rows into normalized salary transactions."""
-    if not HEADER_RE.search(text or ""):
+    if not MONTHLY_LEDGER_HEADER_RE.search(text or ""):
         return []
     out=[]
-    for m in ROW_RE.finditer(text or ""):
+    for m in MONTHLY_LEDGER_ROW_RE.finditer(text or ""):
         date,year_s,entity,amount_s=m.groups()
         year=int(year_s)
         if year != target_year:
@@ -130,53 +141,6 @@ def parse_monthly_ledger(text: str, target_year: int=2025) -> list[LedgerTx]:
             raw_row=m.group(0).strip()
         ))
     return out
-
-
-def _strip_diacritics(s: str) -> str:
-    import unicodedata
-    x=unicodedata.normalize("NFKD",s or "")
-    return "".join(c for c in x if not unicodedata.combining(c))
-
-def _tokenize_person(name: str) -> list[str]:
-    s=clean_entity(name)
-    return re.findall(r"[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźżÀ-ž'’-]+",s)
-
-def _person_similarity(a: str, b: str) -> float:
-    aa=" ".join(_tokenize_person(a)).casefold()
-    bb=" ".join(_tokenize_person(b)).casefold()
-    return SequenceMatcher(None,aa,bb).ratio()
-
-def _safe_same_person(a: AnnualEntity, b: AnnualEntity) -> bool:
-    # This helper is used only inside one institution's already-extracted ledger.
-    if a.entity_kind not in {"person_like","surname_or_unknown"}:
-        return False
-    if b.entity_kind not in {"person_like","surname_or_unknown"}:
-        return False
-    ta=_tokenize_person(a.display_name)
-    tb=_tokenize_person(b.display_name)
-    if not ta or not tb:
-        return False
-
-    na=" ".join(_strip_diacritics(t).casefold() for t in ta)
-    nb=" ".join(_strip_diacritics(t).casefold() for t in tb)
-    if na==nb:
-        return True
-
-    if len(ta)>=2 and len(tb)>=2:
-        sa=_strip_diacritics(ta[0]).casefold()
-        sb=_strip_diacritics(tb[0]).casefold()
-        ga=_strip_diacritics(ta[-1]).casefold()
-        gb=_strip_diacritics(tb[-1]).casefold()
-        if sa==sb and (ga.startswith(gb) or gb.startswith(ga)) and min(len(ga),len(gb))>=5:
-            return True
-
-    sim=_person_similarity(a.display_name,b.display_name)
-    if sim>=0.92 and len(ta)==len(tb):
-        ea=[_strip_diacritics(x).casefold() for x in ta]
-        eb=[_strip_diacritics(x).casefold() for x in tb]
-        if sum(x==y for x,y in zip(ea,eb))>=1:
-            return True
-    return False
 
 def merge_local_person_variants(rows: Iterable[AnnualEntity]) -> list[AnnualEntity]:
     """Merge likely spelling variants of the same person within one institution."""
@@ -338,6 +302,53 @@ def main():
     print(f"transactions={len(txs)}")
     print(f"annual_entities={len(annual)}")
     print(f"annual_sum={sum(x.annual_total for x in annual):.2f}")
+
+def _strip_diacritics(s: str) -> str:
+    import unicodedata
+    x=unicodedata.normalize("NFKD",s or "")
+    return "".join(c for c in x if not unicodedata.combining(c))
+
+def _tokenize_person(name: str) -> list[str]:
+    s=clean_entity(name)
+    return re.findall(r"[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźżÀ-ž'’-]+",s)
+
+def _person_similarity(a: str, b: str) -> float:
+    aa=" ".join(_tokenize_person(a)).casefold()
+    bb=" ".join(_tokenize_person(b)).casefold()
+    return SequenceMatcher(None,aa,bb).ratio()
+
+def _safe_same_person(a: AnnualEntity, b: AnnualEntity) -> bool:
+    # This helper is used only inside one institution's already-extracted ledger.
+    if a.entity_kind not in {"person_like","surname_or_unknown"}:
+        return False
+    if b.entity_kind not in {"person_like","surname_or_unknown"}:
+        return False
+    ta=_tokenize_person(a.display_name)
+    tb=_tokenize_person(b.display_name)
+    if not ta or not tb:
+        return False
+
+    na=" ".join(_strip_diacritics(t).casefold() for t in ta)
+    nb=" ".join(_strip_diacritics(t).casefold() for t in tb)
+    if na==nb:
+        return True
+
+    if len(ta)>=2 and len(tb)>=2:
+        sa=_strip_diacritics(ta[0]).casefold()
+        sb=_strip_diacritics(tb[0]).casefold()
+        ga=_strip_diacritics(ta[-1]).casefold()
+        gb=_strip_diacritics(tb[-1]).casefold()
+        if sa==sb and (ga.startswith(gb) or gb.startswith(ga)) and min(len(ga),len(gb))>=5:
+            return True
+
+    sim=_person_similarity(a.display_name,b.display_name)
+    if sim>=0.92 and len(ta)==len(tb):
+        ea=[_strip_diacritics(x).casefold() for x in ta]
+        eb=[_strip_diacritics(x).casefold() for x in tb]
+        if sum(x==y for x,y in zip(ea,eb))>=1:
+            return True
+    return False
+
 
 if __name__=="__main__":
     main()

@@ -11,6 +11,7 @@ __all__ = [
 ]
 
 
+
 def write_sqlite(con: sqlite3.Connection, rows: list[SalaryRow]) -> None:
     """Write detailed salary rows and institution summaries to SQLite."""
     con.execute('DROP TABLE IF EXISTS salaries_extracted')
@@ -73,4 +74,5 @@ def write_csvs(con: sqlite3.Connection, rows_csv: Path, summary_csv: Path) -> No
         w = csv.writer(f, delimiter=';')
         w.writerow(headers)
         w.writerows(cur.fetchall())
+
 

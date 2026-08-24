@@ -1,15 +1,28 @@
+"""Extract anonymized physician initials from structured salary rows."""
+
 
 from __future__ import annotations
+
+from ..constants import (
+    DOCTOR_INITIALS_MONEY_RE,
+    DOCTOR_INITIALS_HEADER_RE,
+    DOCTOR_INITIALS_SURNAME_HEADER_RE,
+    DOCTOR_INITIALS_FIRST_HEADER_RE,
+)
 import re
+
+
+__all__ = [
+    "norm",
+    "split_row",
+    "normalize_initials",
+    "document_initial_maps",
+    "infer_initials_from_row",
+]
 
 def norm(s):
     """Normalize whitespace and punctuation in a text value."""
     return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip(' |#*_-–—:\t\r\n')
-
-MONEY=re.compile(r'^\s*-?\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{2})\s*(?:z[łl]|PLN)?\s*$',re.I)
-INIT_HEADER=re.compile(r'(?i)^(?:inicja[łl]y|identyfikator\s+lekarza)$')
-SURNAME_HEADER=re.compile(r'(?i)^nazwisko$')
-FIRST_HEADER=re.compile(r'(?i)^imi[ęe]$')
 
 def split_row(s):
     """Split a pipe-delimited source row into normalized cells."""
@@ -42,12 +55,12 @@ def document_initial_maps(doc):
     for line in str(doc or '').splitlines():
         cells=split_row(line)
         if not cells: continue
-        found=[i for i,c in enumerate(cells) if INIT_HEADER.fullmatch(c)]
+        found=[i for i,c in enumerate(cells) if DOCTOR_INITIALS_HEADER_RE.fullmatch(c)]
         if found:
             mode='single'; col=found[0]; surname_col=first_col=None
             continue
-        sidx=[i for i,c in enumerate(cells) if SURNAME_HEADER.fullmatch(c)]
-        fidx=[i for i,c in enumerate(cells) if FIRST_HEADER.fullmatch(c)]
+        sidx=[i for i,c in enumerate(cells) if DOCTOR_INITIALS_SURNAME_HEADER_RE.fullmatch(c)]
+        fidx=[i for i,c in enumerate(cells) if DOCTOR_INITIALS_FIRST_HEADER_RE.fullmatch(c)]
         if sidx and fidx:
             mode='split'; surname_col=sidx[0]; first_col=fidx[0]; col=None
             continue
@@ -58,7 +71,7 @@ def document_initial_maps(doc):
             mode=None; col=surname_col=first_col=None
             continue
 
-        if not any(MONEY.fullmatch(c) for c in cells):
+        if not any(DOCTOR_INITIALS_MONEY_RE.fullmatch(c) for c in cells):
             continue
 
         val=''
@@ -82,9 +95,9 @@ def infer_initials_from_row(raw_row):
     Avoids scanning arbitrary prose or company names.
     """
     cells=split_row(raw_row)
-    if len(cells)<2 or not any(MONEY.fullmatch(c) for c in cells):
+    if len(cells)<2 or not any(DOCTOR_INITIALS_MONEY_RE.fullmatch(c) for c in cells):
         return ''
-    nonmoney=[c for c in cells if c and not MONEY.fullmatch(c) and not re.fullmatch(r'\d+',c)]
+    nonmoney=[c for c in cells if c and not DOCTOR_INITIALS_MONEY_RE.fullmatch(c) and not re.fullmatch(r'\d+',c)]
     # Exact two-letter/dotted identifier as the only textual data cell.
     if len(nonmoney)==1 and re.fullmatch(r'[A-ZĄĆĘŁŃÓŚŹŻ]{2}|[A-ZĄĆĘŁŃÓŚŹŻ]\.?[A-ZĄĆĘŁŃÓŚŹŻ]\.?',nonmoney[0],re.I):
         return normalize_initials(nonmoney[0])
@@ -99,3 +112,4 @@ def infer_initials_from_row(raw_row):
             bb=b.replace('.','').upper()
             return f'{aa}.{bb}.'
     return ''
+

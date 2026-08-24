@@ -96,3 +96,15 @@ Public API is intentionally visible at the top of implementation modules.
 - Public functions have short docstrings that describe purpose and return behavior.
 - Docstrings avoid repeating parameter names when the signature is already self-explanatory.
 - Longer docstrings are reserved for non-obvious parsing assumptions or activation guards.
+
+- no undefined global dependencies hidden by transitive imports,
+
+## Public API facades
+
+`pipeline.py` imports complete public APIs from small facade modules. Wildcard
+imports are allowed there only because every imported module defines an explicit
+`__all__`; this keeps the pipeline import section readable while preserving a
+strict public/private boundary.
+
+Constants are always imported explicitly by name. This improves static analysis
+and IDE support (e.g. VS Code/Pylance) and avoids hidden dependencies.

@@ -1,20 +1,24 @@
+"""Interpret tables that encode contract types in separate salary columns."""
+
 
 from __future__ import annotations
+
+from ..constants import (
+    MULTI_CONTRACT_MONEY_RE,
+)
 import re
 from typing import Optional
 
-MONEY_RE=re.compile(r'-?\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{2})|-?\d{4,9}(?:[,.]\d{2})')
 
-def _norm(s):
-    return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip()
 
-def _money(s):
-    vals=[]
-    for m in MONEY_RE.finditer(str(s or '')):
-        t=m.group(0).replace(' ','').replace('.','').replace(',','.')
-        try: vals.append(float(t))
-        except ValueError: pass
-    return vals
+__all__ = [
+    "contract_type_from_header",
+    "contract_amount_columns",
+    "infer_contract_from_multi_columns",
+    "split_multi_contract_amounts",
+    "expand_stacked_contract_headers",
+    "document_multi_contract_row_map",
+]
 
 def contract_type_from_header(header:str)->Optional[str]:
     """Infer the contract type encoded by a table-column header."""
@@ -85,7 +89,6 @@ def split_multi_contract_amounts(headers:list[str], cells:list[str]):
             out.append((ct,val))
     return out
 
-
 def expand_stacked_contract_headers(headers:list[str], first_data_cells:list[str]):
     """
     Handle OCR/markdown tables where contract labels occupy the first row and
@@ -107,15 +110,6 @@ def expand_stacked_contract_headers(headers:list[str], first_data_cells:list[str
     for h,c in zip(headers,first_data_cells):
         eff.append(_norm((h or '')+' '+(c or '')))
     return eff,True
-
-
-def _split_preserve(line:str):
-    s=str(line or '').strip()
-    if not s.startswith('|'):
-        return []
-    if s.startswith('|'): s=s[1:]
-    if s.endswith('|'): s=s[:-1]
-    return [_norm(x) for x in s.split('|')]
 
 def document_multi_contract_row_map(doc:str):
     """
@@ -159,3 +153,23 @@ def document_multi_contract_row_map(doc:str):
             raw=' | '.join(cells)
             out[raw]=active
     return out
+
+def _norm(s):
+    return re.sub(r'\s+',' ',str(s or '').replace('\xa0',' ')).strip()
+
+def _money(s):
+    vals=[]
+    for m in MULTI_CONTRACT_MONEY_RE.finditer(str(s or '')):
+        t=m.group(0).replace(' ','').replace('.','').replace(',','.')
+        try: vals.append(float(t))
+        except ValueError: pass
+    return vals
+
+def _split_preserve(line:str):
+    s=str(line or '').strip()
+    if not s.startswith('|'):
+        return []
+    if s.startswith('|'): s=s[1:]
+    if s.endswith('|'): s=s[:-1]
+    return [_norm(x) for x in s.split('|')]
+
