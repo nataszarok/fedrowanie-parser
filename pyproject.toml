@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "fedrowanie-parser"
+version = "0.37.0"
+description = "Parser danych o wynagrodzeniach lekarzy z odpowiedzi placówek medycznych."
+authors = ["Project contributors"]
+readme = "README.md"
+packages = [{ include = "fedrowanie_parser", from = "src" }]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<4.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+
+[tool.poetry.scripts]
+fedrowanie-parser = "fedrowanie_parser.cli:main"
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"

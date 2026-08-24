@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Local data and parser outputs
+data/*
+!data/README.md
+output/*
+!output/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+*.csv
+
+# Packaging
+dist/
+build/
+*.egg-info/
