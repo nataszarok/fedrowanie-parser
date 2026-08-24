@@ -9,6 +9,26 @@ from .normalization import *
 # Document/correspondence constants retained from v35.
 
 
+__all__ = [
+    "split_pages",
+    "page_is_2025_relevant",
+    "suspicious_amount",
+    "deduplicate",
+    "classify_nonannual_response",
+    "extract_recipient_messages",
+    "correspondence_status",
+    "is_metadata_context",
+    "topn_comment",
+    "filter_registry_capital_false_rows",
+    "aggregate_count_total_guard",
+    "is_correction_message",
+    "prefer_latest_correction",
+    "is_wrong_month",
+    "recipient_document",
+    "page_is_group_aggregate_salary_table",
+]
+
+
 def split_pages(text: str) -> list[tuple[int, str]]:
     """Parse or process the `split_pages` layout/stage."""
     src = text or ''
@@ -227,7 +247,7 @@ def correspondence_status(doc: str, rows: list[SalaryRow]) -> tuple[str, str]:
         return ('REFUSAL_NO_SUBSTANTIVE_DATA', 'refusal')
     return ('NO_SUBSTANTIVE_DATA_DETECTED', '')
 
-def _topn_comment(doc: str) -> str:
+def topn_comment(doc: str) -> str:
     """Return a human-readable note when the reply explicitly contains only top-N salaries."""
     text = norm_space(doc)
     patterns = [
@@ -256,11 +276,11 @@ def _topn_comment(doc: str) -> str:
         return 'Tylko najwyższe wynagrodzenia (TOP N, osobne kategorie); dane nie obejmują wszystkich lekarzy.'
     return ''
 
-def _metadata_context(text: str) -> bool:
-    """Parse or process the `_metadata_context` layout/stage."""
+def is_metadata_context(text: str) -> bool:
+    """Parse or process the `is_metadata_context` layout/stage."""
     return bool(re.search(r'(?i)kapita[łl]\s+zak[łl]adowy|\bKRS\b|\bREGON\b|\bNIP\b|kapita[łl]\s+sp[oó][łl]ki|s[ąa]d\s+rejonowy|rejestr\w*\s+s[ąa]dow', text or ''))
 
-def _filter_registry_capital_false_rows(rows, doc: str):
+def filter_registry_capital_false_rows(rows, doc: str):
     """Guard against OCR splitting e.g. '65 559 000 zł' into Lekarz 65 -> 559000."""
     lines=[norm_space(x) for x in (doc or '').splitlines()]
     out=[]
@@ -278,7 +298,7 @@ def _filter_registry_capital_false_rows(rows, doc: str):
         for i,line in enumerate(lines):
             if line != raw: continue
             ctx=' '.join(lines[max(0,i-14):min(len(lines),i+6)])
-            if _metadata_context(ctx): bad=True; break
+            if is_metadata_context(ctx): bad=True; break
         if not bad:
             # Also catch one-line OCR: "Kapitał zakładowy: 65 559 000,00 zł".
             pat=rf'(?is)(?:kapita[łl]\s+zak[łl]adowy|\bKRS\b|\bREGON\b|\bNIP\b).{{0,120}}\b{re.escape(idx)}\s+{int(val):,}'.replace(',', r'[ .]?')
@@ -286,15 +306,15 @@ def _filter_registry_capital_false_rows(rows, doc: str):
         if not bad: out.append(r)
     return out
 
-def _aggregate_count_total_guard(doc: str) -> bool:
+def aggregate_count_total_guard(doc: str) -> bool:
     """True for prose such as '1151 lekarzy; łączna kwota ...', not individual lists."""
     t=norm_space(doc)
     count=bool(re.search(r'(?i)(?:ilo[śs][ćc]|liczba)\s+(?:zatrudnionych\s+)?lekarzy.{0,80}?\b\d{1,5}\s*(?:os[oó]b)?', t))
     total=bool(re.search(r'(?i)(?:[łl][ąa]czna|sumaryczna|suma)\s+(?:kwota\s+)?(?:wyp[łl]aconych\s+)?wynagrodze[nń].{0,100}?\d{1,3}(?:[ .]\d{3})+', t))
     return count and total
 
-def _is_correction_message(text: str) -> bool:
-    """Parse or process the `_is_correction_message` layout/stage."""
+def is_correction_message(text: str) -> bool:
+    """Parse or process the `is_correction_message` layout/stage."""
     t = text or ''
     # "prawo do sprostowania danych" w stopce RODO nie jest korektą odpowiedzi.
     t_wo_rodo = re.sub(
@@ -312,11 +332,11 @@ def _is_correction_message(text: str) -> bool:
     )
     return explicit
 
-def _prefer_latest_correction(doc: str) -> str:
+def prefer_latest_correction(doc: str) -> str:
     """If later recipient material is explicitly a correction, discard earlier salary versions."""
     parts=re.split(r'(?m)(?=^### WIADOMOŚĆ ODBIORCY\s*$)', doc or '')
     parts=[x for x in parts if x.strip()]
-    corr=[i for i,x in enumerate(parts) if _is_correction_message(x)]
+    corr=[i for i,x in enumerate(parts) if is_correction_message(x)]
     if corr:
         part=parts[corr[-1]]
         # Within that message, keep the salary table nearest before the correction note.
@@ -329,37 +349,37 @@ def _prefer_latest_correction(doc: str) -> str:
         return part
     return doc
 
-def _wrong_month(text: str) -> bool:
-    """Parse or process the `_wrong_month` layout/stage."""
+def is_wrong_month(text: str) -> bool:
+    """Parse or process the `is_wrong_month` layout/stage."""
     return bool(re.search('(?i)(?:stycze[nń]|luty|marzec|kwiecie[nń]|maj|czerwiec|lipiec|sierpie[nń]|wrzesie[nń]|październik|pazdziernik|listopad|grudzie[nń]).{0,40}\\b(?:2024|2026|2027)\\b', text))
 
-def _recipient_document(full_doc: str) -> tuple[str, dict]:
-    """Parse or process the `_recipient_document` layout/stage."""
+def recipient_document(full_doc: str) -> tuple[str, dict]:
+    """Parse or process the `recipient_document` layout/stage."""
     doc, meta = extract_recipient_messages(full_doc)
     if len(money_cells(doc)) >= 10 or not re.search('(?m)^A\\) email jest odpowiedzią', full_doc):
-        return (_prefer_latest_correction(doc), meta)
+        return (prefer_latest_correction(doc), meta)
     candidates = []
     for ch in re.split('(?m)^### WIADOMOŚĆ ODBIORCY\\s*$', full_doc)[1:]:
         if not re.search('(?m)^A\\) email jest odpowiedzią', ch):
             continue
         ch = re.split('(?m)^Znormalizowana odpowiedź\\s*$', ch, maxsplit=1)[0]
-        if money_cells(ch) and (not _wrong_month(ch)):
+        if money_cells(ch) and (not is_wrong_month(ch)):
             candidates.append(ch)
     if not candidates:
         for m in re.finditer('(?m)^A\\) email jest odpowiedzią', full_doc):
             begin = max(0, full_doc.rfind('### WIADOMOŚĆ ODBIORCY', 0, m.start()))
             finish = full_doc.find('Znormalizowana odpowiedź', m.end())
             ch = full_doc[begin:finish if finish >= 0 else len(full_doc)]
-            if len(money_cells(ch)) >= 5 and (not _wrong_month(ch)):
+            if len(money_cells(ch)) >= 5 and (not is_wrong_month(ch)):
                 candidates.append(ch)
     if candidates:
         doc = max(candidates, key=lambda x: len(money_cells(x)))
         meta.update(thread_detected=True, substantive_recipient_messages=1, fallback_a_message=True)
-    doc = _prefer_latest_correction(doc)
+    doc = prefer_latest_correction(doc)
     return (doc, meta)
 
-def _page_is_group_aggregate_salary_table(page: str) -> bool:
-    """Parse or process the `_page_is_group_aggregate_salary_table` layout/stage."""
+def page_is_group_aggregate_salary_table(page: str) -> bool:
+    """Parse or process the `page_is_group_aggregate_salary_table` layout/stage."""
     lines = page.splitlines()
     for i, line in enumerate(lines[:-1]):
         headers = split_markdown_row(line)

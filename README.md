@@ -126,33 +126,32 @@ Szczegóły podziału odpowiedzialności między modułami znajdują się w `ARC
 ## Struktura
 
 ```text
-fedrowanie-parser/
-├── pyproject.toml
-├── README.md
-├── .gitignore
-├── LICENSE
-├── data/
-│   └── README.md
-├── output/
-│   └── .gitkeep
-├── src/
-│   └── fedrowanie_parser/
-│       ├── __init__.py
-│       ├── cli.py
-│       ├── attachment_contract_context.py
-│       ├── contract_semantic_context.py
-│       ├── doctor_initials_context.py
-│       ├── doctor_status_context.py
-│       ├── monthly_ledger_annualizer_v2_local_fuzzy.py
-│       ├── multi_contract_columns.py
-│       ├── organizational_unit_context.py
-│       ├── person_name_context.py
-│       ├── section_salary_list.py
-│       ├── specialization_context.py
-│       └── unit_column_context.py
-└── tests/
-    └── test_smoke.py
+src/fedrowanie_parser/
+├── cli.py
+├── pipeline.py
+├── models.py
+├── constants.py
+├── services/
+│   └── case_extraction.py
+├── processing/
+│   ├── document.py
+│   └── normalization.py
+├── parsing/
+│   ├── tables.py
+│   ├── plain_text.py
+│   ├── structured/
+│   │   └── continuations.py
+│   ├── sequences/
+│   │   ├── vertical.py
+│   │   └── inline.py
+│   └── ocr/
+│       └── damaged.py
+├── enrichment/
+├── special_cases/
+└── io/
 ```
+
+Szczegółowy opis odpowiedzialności modułów znajduje się w `ARCHITECTURE.md`.
 
 ## Wymagania
 
@@ -196,6 +195,26 @@ poetry run python -m fedrowanie_parser.cli data/fedrowanie.db
 ```
 
 Parser kopiuje wejściową bazę do `--out-db`, a następnie tworzy/odświeża w niej tabele `salaries_extracted` i `salaries_summary`. Generuje też dwa pliki CSV.
+
+## Zależności i czyste środowisko
+
+Parser nie ma zewnętrznych zależności runtime. Korzysta wyłącznie z biblioteki
+standardowej Pythona 3.11+ oraz modułów znajdujących się w tym repozytorium.
+
+```toml
+[tool.poetry.dependencies]
+python = ">=3.11,<4.0"
+```
+
+Jedyną zależnością developerską jest `pytest`.
+
+Na nowym komputerze:
+
+```bash
+poetry env use python3.11
+poetry install
+poetry run fedrowanie-parser /sciezka/do/fedrowanie.db
+```
 
 ## Testy
 

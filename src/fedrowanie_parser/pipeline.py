@@ -3,21 +3,39 @@ from __future__ import annotations
 import re
 import sqlite3
 from .models import SalaryRow
+from .services.case_extraction import validate_case_rows
 from .processing.normalization import *
+from .processing.document import (
+    split_pages,
+    page_is_2025_relevant,
+    suspicious_amount,
+    deduplicate,
+    classify_nonannual_response,
+    extract_recipient_messages,
+    correspondence_status,
+    is_metadata_context,
+    topn_comment,
+    filter_registry_capital_false_rows,
+    aggregate_count_total_guard,
+    is_correction_message,
+    prefer_latest_correction,
+    is_wrong_month,
+    recipient_document,
+    page_is_group_aggregate_salary_table,
+)
 from .parsing.tables import *
 from .parsing.layouts import *
 from .parsing.plain_text import *
-from .processing.document import *
 from .processing.document import (
-    _topn_comment,
-    _metadata_context,
-    _filter_registry_capital_false_rows,
-    _aggregate_count_total_guard,
-    _is_correction_message,
-    _prefer_latest_correction,
-    _wrong_month,
-    _recipient_document,
-    _page_is_group_aggregate_salary_table,
+    topn_comment,
+    is_metadata_context,
+    filter_registry_capital_false_rows,
+    aggregate_count_total_guard,
+    is_correction_message,
+    prefer_latest_correction,
+    is_wrong_month,
+    recipient_document,
+    page_is_group_aggregate_salary_table,
 )
 
 def _page_rows(case_pk, institution_pk, placowka, page_no, page, doc, inherited_contract, inherited_kind, inherited_spec):
@@ -26,7 +44,7 @@ def _page_rows(case_pk, institution_pk, placowka, page_no, page, doc, inherited_
     if (vals and max(vals) < 1000
             and not re.search(r'[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]', page)):
         return []
-    if _page_is_group_aggregate_salary_table(page):
+    if page_is_group_aggregate_salary_table(page):
         return []
     args = (case_pk, institution_pk, placowka, page_no, page)
     broken_ocr = parse_ocr_broken_numbered_salary_table(*args)
@@ -131,11 +149,11 @@ def _rank_dedup(rows):
 
 def _case_rows(case_pk, institution_pk, placowka, doc):
     """Extract, reconcile and enrich salary rows for a single case."""
-    if _aggregate_count_total_guard(doc):
+    if aggregate_count_total_guard(doc):
         return []
     parallel = parse_parallel_name_amount_lists(case_pk, institution_pk, placowka, doc)
     if parallel:
-        return _filter_registry_capital_false_rows(_rank_dedup(_technical_filter(parallel)), doc)
+        return filter_registry_capital_false_rows(_rank_dedup(_technical_filter(parallel)), doc)
 
     rows = parse_section_state_rows(case_pk, institution_pk, placowka, doc)
     contract, kind, spec = ('', 'brutto', '')
@@ -212,7 +230,7 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
         if len(cand)>len(best) and multiset_subset(amounts(best),amounts(cand)):
             best=cand
 
-    final_rows=_filter_registry_capital_false_rows(_rank_dedup(best),doc)
+    final_rows=filter_registry_capital_false_rows(_rank_dedup(best),doc)
 
     # Final record-level pass for tables whose columns are separate employment
     # forms. This also covers rows recovered by continuation parsers: the raw
@@ -502,7 +520,7 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
             if ini:
                 r.inicjaly=ini
 
-    return final_rows
+    return validate_case_rows(final_rows)
 
 def _store_case_status(con, rows):
     """Parse or process the `_store_case_status` layout/stage."""
@@ -521,7 +539,7 @@ def extract_all(con: sqlite3.Connection) -> list[SalaryRow]:
         b[2].append(r['text'] or '')
     accepted, statuses = ([], [])
     for case_pk, (institution_pk, placowka, parts) in cases.items():
-        doc, meta = _recipient_document('\n'.join(parts))
+        doc, meta = recipient_document('\n'.join(parts))
         if not meta['thread_detected']:
             statuses.append((case_pk, institution_pk, placowka, 'NO_SUBSTANTIVE_DATA_DETECTED', 'recipient_thread_not_detected', 0))
             continue
@@ -529,7 +547,7 @@ def extract_all(con: sqlite3.Connection) -> list[SalaryRow]:
             statuses.append((case_pk, institution_pk, placowka, 'NO_SUBSTANTIVE_DATA_DETECTED', 'no_substantive_recipient_reply', 0))
             continue
         rows = _case_rows(case_pk, institution_pk, placowka, doc)
-        comment = _topn_comment(doc)
+        comment = topn_comment(doc)
         if comment:
             for r in rows:
                 r.komentarz = comment

@@ -5,6 +5,12 @@ from ..models import SalaryRow
 from ..processing.normalization import *
 from .layouts import page_context_contract
 
+__all__ = [
+    "parse_plain_lines",
+    "parse_section_state_rows",
+]
+
+
 def parse_plain_lines(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str) -> list[SalaryRow]:
     """Parse or process the `parse_plain_lines` layout/stage."""
     out: list[SalaryRow] = []

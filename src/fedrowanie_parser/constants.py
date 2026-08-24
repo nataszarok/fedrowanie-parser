@@ -53,3 +53,27 @@ PARSER_RANK = {'ocr-broken-numbered-table': 11, 'parallel-name-amount-lists': 10
 STRUCTURED_METADATA_PARSERS = {'contract-practice-cost-list', 'indexed-single-salary-md', 'indexed-total-gross-continuation', 'salary-bracket-index', 'numbered-named-inline', 'anon-lekarz-inline-list'}
 
 TOPN_WORD_RE = re.compile(r'(?i)\b(?:najwy[żz]szych|najwy[żz]sze|najwy[żz]szym)\b')
+
+__all__ = [
+    "YEAR",
+    "PAGE_RE",
+    "MONEY_TOKEN",
+    "DATE_RE",
+    "ISO_DATE_RE",
+    "PHONEISH_RE",
+    "SUMMARY_RE",
+    "PERSON_TOTAL_RE",
+    "YEAR_OTHER_RE",
+    "CONTRACT_PATTERNS",
+    "NET_RE",
+    "GROSS_RE",
+    "SPECIALIZATION_WORDS",
+    "MONTH_NAME_RE",
+    "THREAD_DATE_RE",
+    "AUTO_REPLY_RE",
+    "REQUESTER_SENDER_RE",
+    "QUOTE_CUT_PATTERNS",
+    "PARSER_RANK",
+    "STRUCTURED_METADATA_PARSERS",
+    "TOPN_WORD_RE",
+]

@@ -4,6 +4,11 @@ from typing import Optional
 from ..models import SalaryRow
 from ..processing.normalization import *
 
+__all__ = [
+    "parse_markdown_tables",
+]
+
+
 def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str, inherited_contract: str='', inherited_kind: str='brutto', inherited_spec: str='') -> list[SalaryRow]:
     """Parse structured salary tables while preserving column semantics and provenance."""
     lines = page.splitlines()

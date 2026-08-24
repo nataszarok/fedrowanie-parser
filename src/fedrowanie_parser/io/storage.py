@@ -5,6 +5,12 @@ import sqlite3
 from pathlib import Path
 from ..models import SalaryRow
 
+__all__ = [
+    "write_sqlite",
+    "write_csvs",
+]
+
+
 def write_sqlite(con: sqlite3.Connection, rows: list[SalaryRow]) -> None:
     """Persist extracted rows and aggregated institution summaries to SQLite."""
     con.execute('DROP TABLE IF EXISTS salaries_extracted')
