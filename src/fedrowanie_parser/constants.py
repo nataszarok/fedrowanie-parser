@@ -260,7 +260,10 @@ DOCTOR_STATUS_PATTERNS=[
 # enrichment/doctor_status.py
 DOCTOR_STATUS_GENERIC_ID_RE=re.compile(r'(?i)^lekarz\s+\d+$')
 
+UNPROCESSED_ATTACHMENT_EXTENSIONS = ("xls", "xlsx", "ods", "zip", "7z", "dat", "rar", "doc", "docx")
+
 __all__ = [
+    "UNPROCESSED_ATTACHMENT_EXTENSIONS",
     "YEAR",
     "PAGE_RE",
     "MONEY_TOKEN",

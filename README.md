@@ -2,11 +2,191 @@
 
 Parser odpowiedzi placówek medycznych dotyczących wynagrodzeń lekarzy za 2025 r.
 
-Repozytorium zawiera aktualną wersję parsera **v35**, rozbitą na główny parser i wyspecjalizowane moduły kontekstowe. Projekt jest przygotowany do uruchamiania przez **Poetry**.
+Parser **nie pobiera danych źródłowych samodzielnie**. Jego wejściem jest baza SQLite
+`fedrowanie.db` generowana przez osobne repozytorium
+`zarobkilekarzy/fedrowanie`:
+
+https://github.com/zarobkilekarzy/fedrowanie/tree/main
+
+Pełny przepływ danych wygląda więc następująco:
+
+```text
+zarobkilekarzy/fedrowanie
+        │
+        │ pobranie i przetworzenie danych źródłowych
+        ▼
+data/fedrowanie.db
+        │
+        │ wejście do tego projektu
+        ▼
+fedrowanie-parser
+        │
+        ├── cases_status
+        ├── salaries_extracted
+        └── salaries_summary
+```
+
+Repozytorium `fedrowanie` jest źródłem danych i odpowiada za utworzenie oraz
+zasilenie bazy wejściowej. Dopiero gotową bazę `fedrowanie.db` należy przekazać
+do tego parsera.
+
+## Szybki start
+
+Do pełnego uruchomienia procesu potrzebne są **oba repozytoria**. Najwygodniej
+trzymać je obok siebie:
+
+```text
+workspace/
+├── fedrowanie/
+└── fedrowanie-parser/
+```
+
+### 1. Pobierz repozytorium źródłowe
+
+```bash
+git clone https://github.com/zarobkilekarzy/fedrowanie.git
+cd fedrowanie
+```
+
+Następnie przygotuj środowisko i wykonaj komendy opisane w README projektu
+`fedrowanie`, które **tworzą i zasilają bazę `data/fedrowanie.db`**.
+
+> `fedrowanie` jest niezależnym projektem i pozostaje właścicielem procesu
+> pozyskiwania danych. Dlatego konkretne komendy służące do zasilania bazy
+> powinny być brane z jego aktualnego README, zamiast duplikować je tutaj i
+> ryzykować, że dokumentacja obu repozytoriów się rozjedzie.
+
+Przed uruchomieniem parsera upewnij się, że istnieje:
+
+```text
+fedrowanie/data/fedrowanie.db
+```
+
+### 2. Pobierz i zainstaluj parser
+
+Wróć do katalogu nadrzędnego i pobierz to repozytorium:
+
+```bash
+cd ..
+git clone <URL_REPOZYTORIUM_FEDROWANIE_PARSER>
+cd fedrowanie-parser
+
+poetry env use python3.11   # opcjonalnie, jeśli domyślny Python jest starszy
+poetry install
+```
+
+Projekt wymaga **Python 3.11+** i **Poetry**.
+
+### 3. Uruchom parser na wygenerowanej bazie
+
+Jeżeli oba repozytoria znajdują się obok siebie:
+
+```bash
+poetry run fedrowanie-parser ../fedrowanie/data/fedrowanie.db
+```
+
+To samo można uruchomić bezpośrednio jako moduł Pythona:
+
+```bash
+poetry run python -m fedrowanie_parser.cli ../fedrowanie/data/fedrowanie.db
+```
+
+Jeżeli chcesz jawnie wskazać wszystkie pliki wynikowe:
+
+```bash
+mkdir -p output
+
+poetry run fedrowanie-parser ../fedrowanie/data/fedrowanie.db \
+  --out-db output/fedrowanie_wynagrodzenia_2025.db \
+  --case-status-csv output/status_spraw_2025.csv \
+  --rows-csv output/wynagrodzenia_lekarzy_2025.csv \
+  --summary-csv output/podsumowanie_placowek_2025.csv
+```
+
+Parser kopiuje bazę wejściową do `--out-db` i na tej kopii tworzy lub odświeża
+trzy tabele wynikowe. **Każda z nich ma również własny eksport CSV.**
+
+| tabela SQLite | zawartość | odpowiednik CSV |
+|---|---|---|
+| `cases_status` | Jeden wiersz na analizowaną sprawę. Zawiera `case_pk`, placówkę, status parsowania, powód nadania statusu oraz liczbę wykrytych kandydatów na rekordy. Służy do diagnostyki: pokazuje również sprawy, z których finalnie nie wyciągnięto wynagrodzeń. | `status_spraw_2025.csv` |
+
+### Statusy w `cases_status`
+
+Pole `status` opisuje **wynik analizy całej sprawy**, a nie pojedynczego rekordu
+wynagrodzenia.
+
+| `status` | znaczenie |
+|---|---|
+| `INDIVIDUAL_ANNUAL_2025` | Parser rozpoznał indywidualne wynagrodzenia za 2025 r. Rekordy z takiej sprawy mogą trafić do `salaries_extracted`. |
+| `INDIVIDUAL_ANNUAL_2025_AFTER_OR_WITH_REFUSAL` | W korespondencji występuje odmowa lub podobne zastrzeżenie, ale mimo tego odpowiedź zawiera indywidualne dane za 2025 r. |
+| `SUBSTANTIVE_AGGREGATE_ONLY` | Odpowiedź jest merytoryczna, ale zawiera wyłącznie dane zagregowane/statystyczne zamiast indywidualnych rocznych wynagrodzeń. |
+| `SUBSTANTIVE_NONCOMPARABLE_DATA` | Odpowiedź zawiera dane dotyczące wynagrodzeń, ale w formie, której nie można wiarygodnie porównać z indywidualnymi rocznymi wynagrodzeniami za 2025 r. |
+| `SUBSTANTIVE_DISTRIBUTION_ONLY` | Odpowiedź podaje jedynie rozkład/przedziały/statystyki wynagrodzeń, a nie rekordy indywidualne. |
+| `REFUSAL_NO_SUBSTANTIVE_DATA` | Placówka odmówiła udostępnienia danych i parser nie znalazł równocześnie użytecznych indywidualnych danych wynagrodzeniowych. |
+| `NO_SUBSTANTIVE_DATA_DETECTED` | Parser nie wykrył odpowiedzi zawierającej dane, które można potraktować jako indywidualne wynagrodzenia za 2025 r. |
+
+Pole `reason` doprecyzowuje, **dlaczego** sprawa otrzymała dany status. Jest to
+pole diagnostyczne i może zawierać bardziej szczegółowe wartości, np.
+`recipient_thread_not_detected`, `no_substantive_recipient_reply`,
+`individual_or_anonymous_values`, `aggregate_or_statistics`,
+`group_min_max_not_individual_salaries` lub
+`monthly_group_statistics_not_individual_annual_list`. Informacja o nieprzetworzonym załączniku nie zmienia `status` ani `reason`; jest przechowywana wyłącznie w osobnej fladze `unprocessed_attachment`.
+
+`parsed_candidate_rows` oznacza liczbę rekordów-kandydatów znalezionych podczas
+parsowania sprawy. Nie należy interpretować tej wartości jako liczby finalnych
+rekordów w `salaries_extracted`, ponieważ dalsza klasyfikacja sprawy decyduje,
+czy kandydaci zostaną zaakceptowani.
+
+
+### Flagi proceduralne w `cases_status`
+
+Status końcowy i flagi proceduralne pełnią różne role. `status` opisuje wynik
+merytoryczny całej sprawy, natomiast poniższe kolumny typu `0/1` zachowują
+informację o tym, **co wydarzyło się w toku korespondencji**. Kilka flag może
+być prawdziwych jednocześnie.
+
+| kolumna | znaczenie |
+|---|---|
+| `requested_more_time` | Placówka poinformowała o przedłużeniu terminu albo potrzebie dodatkowego czasu na przygotowanie odpowiedzi. |
+| `asked_about_anonymization` | Placówka zapytała lub poprosiła o potwierdzenie, czy dane mogą zostać przekazane po anonimizacji / bez danych osobowych. |
+| `requested_clarification` | Placówka poprosiła o doprecyzowanie, sprecyzowanie lub dodatkowe wyjaśnienie zakresu wniosku. |
+| `requested_processed_info_justification` | Placówka zakwalifikowała żądanie jako dotyczące informacji przetworzonej i oczekiwała wykazania szczególnego interesu publicznego lub dodatkowego uzasadnienia. |
+| `fee_notice` | W korespondencji pojawiła się informacja o opłacie lub dodatkowych kosztach przygotowania/udostępnienia informacji. |
+| `transferred_or_not_competent` | Placówka wskazała brak właściwości/kompetencji albo przekazała sprawę do innego podmiotu. |
+| `formal_deficiency_request` | Placówka wezwała do uzupełnienia braków formalnych, np. podpisu, pełnomocnictwa lub samego wniosku. |
+| `refusal_detected` | W canonicalnej klasyfikacji sprawy wykryto odmowę udostępnienia danych. Flaga korzysta z tej samej logiki co finalny status, a nie z osobnego luźnego dopasowania tekstowego. |
+| `unprocessed_attachment` | Sprawa zawiera potencjalnie istotny załącznik (`xls/xlsx/ods/zip/7z/dat/rar/doc/docx`) bez niepustego tekstu w `attachment_texts`. |
+
+Przykładowo sprawa może zakończyć się statusem
+`INDIVIDUAL_ANNUAL_2025`, a jednocześnie mieć
+`requested_more_time = 1`. Oznacza to, że placówka najpierw poprosiła o więcej
+czasu, ale ostatecznie przekazała dane.
+
+| `salaries_extracted` | Główna tabela szczegółowa. Jeden wiersz odpowiada wyparsowanemu rekordowi wynagrodzenia. Zawiera m.in. placówkę, nazwisko lub inicjały lekarza, specjalizację, status/stanowisko, jednostkę lub oddział, typ umowy, wynagrodzenie netto/brutto, stronę źródłową, użyty parser, confidence oraz `raw_row`. | `wynagrodzenia_lekarzy_2025.csv` |
+| `salaries_summary` | Podsumowanie tworzone z `salaries_extracted`, zagregowane na poziomie placówki. Zawiera liczbę rekordów, sumę wynagrodzeń, najwyższe wynagrodzenie oraz liczbę rekordów przekraczających 500 tys. i 1 mln zł. | `podsumowanie_placowek_2025.csv` |
+
+Wyniki są więc dostępne równolegle w dwóch formatach:
+
+```text
+fedrowanie_wynagrodzenia_2025.db
+├── cases_status
+├── salaries_extracted
+└── salaries_summary
+
+CSV
+├── status_spraw_2025.csv
+├── wynagrodzenia_lekarzy_2025.csv
+└── podsumowanie_placowek_2025.csv
+```
+
+SQLite jest pełnym wynikiem procesu i zachowuje wszystkie trzy tabele w jednej
+bazie. CSV są wygodnymi, niezależnymi eksportami tych samych tabel do dalszej
+analizy np. w Excelu, Pythonie lub narzędziach BI.
 
 ## Przykładowy wynik
 
-Po parsowaniu dane są normalizowane do jednej tabeli. Przykładowe, zanonimizowane wiersze mogą wyglądać tak:
+Po parsowaniu dane są normalizowane do jednej tabeli. Przykładowe,
+zanonimizowane wiersze `salaries_extracted` mogą wyglądać tak:
 
 | institution_name | doctor_name | doctor_initials | specialization | doctor_status | organizational_unit | contract_type | gross_compensation |
 |---|---|---|---|---|---|---|---:|
@@ -15,51 +195,9 @@ Po parsowaniu dane są normalizowane do jednej tabeli. Przykładowe, zanonimizow
 | Szpital C | Anna Nowak |  |  | lekarz w trakcie specjalizacji | SOR | umowa zlecenia | 312 800,00 zł |
 | Szpital D |  | K.M. | anestezjologia i intensywna terapia | lekarz specjalista | OAiIT |  | 958 410,75 zł |
 
-To tylko przykład struktury wyniku — wartości i dane osobowe w tabeli powyżej są przykładowe. W rzeczywistych danych część pól może być pusta, jeżeli institution_name nie podała danej informacji albo nie da się jej wiarygodnie wywnioskować z dokumentu.
-
-Oprócz pól pokazanych wyżej wynik zawiera także identyfikatory sprawy i placówki, kwotę netto, numer strony, nazwę użytego parsera, poziom pewności, surowy wiersz źródłowy i comment techniczny.
-
-## Szybki start — jak wygenerować bazę
-
-Projekt wymaga **Python 3.11+** i **Poetry**. Po sklonowaniu lub rozpakowaniu repozytorium wejdź do jego katalogu i zainstaluj projekt:
-
-```bash
-poetry env use python3.11   # opcjonalnie, jeśli domyślny Python jest starszy niż 3.11
-poetry install
-```
-
-Następnie uruchom parser, podając ścieżkę do źródłowej bazy `fedrowanie.db`:
-
-```bash
-poetry run fedrowanie-parser /sciezka/do/fedrowanie.db
-```
-
-Przykład, jeśli baza znajduje się w sąsiednim repozytorium:
-
-```bash
-poetry run fedrowanie-parser ../fedrowanie/data/fedrowanie.db
-```
-
-Można też uruchomić ten sam kod jako moduł Pythona:
-
-```bash
-poetry run python -m fedrowanie_parser.cli ../fedrowanie/data/fedrowanie.db
-```
-
-Bez dodatkowych argumentów parser zapisze wyniki w bieżącym katalogu zgodnie z domyślnymi nazwami CLI. Jeśli chcesz jawnie kontrolować lokalizację wszystkich wyników:
-
-```bash
-mkdir -p output
-
-poetry run fedrowanie-parser ../fedrowanie/data/fedrowanie.db \
-  --out-db output/fedrowanie_wynagrodzenia_2025.db \
-  --rows-csv output/wynagrodzenia_lekarzy_2025.csv \
-  --summary-csv output/podsumowanie_placowek_2025.csv
-```
-
-Najważniejszym artefaktem jest `--out-db`: jest to wynikowa baza SQLite zawierająca wyparsowane dane. Dwa pliki CSV są wygodnymi eksportami tabeli szczegółowej i podsumowania.
-
-> Samo `poetry run ...` na świeżo pobranym repozytorium nie wystarczy. Najpierw wykonaj `poetry install`, aby pakiet `fedrowanie_parser` został zainstalowany w środowisku Poetry.
+To tylko przykład struktury wyniku. W rzeczywistych danych część pól może być
+pusta, jeżeli placówka nie podała danej informacji albo nie da się jej
+wiarygodnie wywnioskować z dokumentu.
 
 ## Jak działa parser — high level
 
@@ -163,42 +301,6 @@ Szczegółowy opis odpowiedzialności modułów znajduje się w `ARCHITECTURE.md
 - Poetry
 
 Kod parsera korzysta wyłącznie z biblioteki standardowej Pythona. `pytest` jest zależnością developerską do testów.
-
-## Instalacja
-
-Pełny przykład uruchomienia znajduje się w sekcji **Szybki start** na początku README.
-
-```bash
-git clone <URL_REPOZYTORIUM>
-cd fedrowanie-parser
-poetry env use python3.11   # opcjonalnie
-poetry install
-```
-
-## Uruchomienie
-
-Umieść wejściową bazę SQLite lokalnie, np. jako:
-
-```text
-data/fedrowanie.db
-```
-
-Następnie:
-
-```bash
-poetry run fedrowanie-parser data/fedrowanie.db \
-  --out-db output/fedrowanie_wynagrodzenia_2025.db \
-  --rows-csv output/wynagrodzenia_lekarzy_2025.csv \
-  --summary-csv output/podsumowanie_placowek_2025.csv
-```
-
-Można też uruchomić moduł bezpośrednio:
-
-```bash
-poetry run python -m fedrowanie_parser.cli data/fedrowanie.db
-```
-
-Parser kopiuje wejściową bazę do `--out-db`, a następnie tworzy/odświeża w niej tabele `salaries_extracted` i `salaries_summary`. Generuje też dwa pliki CSV.
 
 ## Zależności i czyste środowisko
 

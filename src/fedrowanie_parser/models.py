@@ -27,12 +27,28 @@ class SalaryRow:
 
 @dataclass(frozen=True)
 class SourceCase:
-    """Source case assembled from case pages and institution metadata."""
+    """Source case assembled from source text, institution metadata and attachment diagnostics."""
 
     case_pk: int
     institution_pk: Optional[int]
     institution_name: str
     text: str
+    unprocessed_attachments: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CaseFlags:
+    """Independent procedural signals detected in recipient correspondence."""
+
+    requested_more_time: bool = False
+    asked_about_anonymization: bool = False
+    requested_clarification: bool = False
+    requested_processed_info_justification: bool = False
+    fee_notice: bool = False
+    transferred_or_not_competent: bool = False
+    formal_deficiency_request: bool = False
+    refusal_detected: bool = False
+    unprocessed_attachment: bool = False
 
 
 @dataclass(frozen=True)
@@ -45,6 +61,7 @@ class CaseParseStatus:
     status: str
     reason: str
     parsed_candidate_rows: int
+    flags: CaseFlags = CaseFlags()
 
 
 @dataclass

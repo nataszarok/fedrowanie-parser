@@ -124,14 +124,34 @@ knowledge out of extraction logic.
 The CLI exposes the three SQLite outputs explicitly:
 
 ```text
-ExtractionResult.statuses -> write_case_statuses() -> salaries_case_status
+ExtractionResult.statuses -> write_case_statuses() -> cases_status
 
 ExtractionResult.rows -> write_extracted_rows() -> salaries_extracted
 salaries_extracted -> write_summary() -> salaries_summary
 
+cases_status -> write_case_status_csv()
 salaries_extracted -> write_extracted_csv()
 salaries_summary -> write_summary_csv()
 ```
 
 `source_repository.py` is read-only and only assembles `SourceCase` objects.
 `storage.py` owns all writes and each public function performs one visible output step.
+
+## Unprocessed attachment diagnostics
+
+`source_repository.load_source_cases()` checks attachment metadata for potentially
+data-bearing formats (`xls`, `xlsx`, `ods`, `zip`, `7z`, `dat`, `rar`, `doc`, `docx`).
+An attachment is considered unprocessed when no matching non-empty record exists
+in `attachment_texts`.
+
+The information is carried by `SourceCase.unprocessed_attachments` and persisted exclusively as the `unprocessed_attachment` flag in `cases_status`.
+The semantic `status` remains independent from attachment-processing diagnostics.
+
+## Procedural case flags
+
+Procedural correspondence signals are modeled independently from the final
+semantic case status. `processing/case_flags.py` classifies recipient-side
+correspondence into boolean `CaseFlags`, which are persisted as columns in
+`cases_status`. This allows one case to retain multiple events (for example,
+deadline extension followed by a successful data response) without turning
+`status` into a mutually-exclusive workflow state machine.

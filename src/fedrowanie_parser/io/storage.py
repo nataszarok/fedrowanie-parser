@@ -8,43 +8,62 @@ from pathlib import Path
 from ..models import CaseParseStatus, SalaryRow
 
 __all__ = [
-    "write_case_statuses",
+    "write_cases_status",
     "write_extracted_rows",
     "write_summary",
+    "write_cases_status_csv",
     "write_extracted_csv",
     "write_summary_csv",
 ]
 
 
-def write_case_statuses(
+def write_cases_status(
     con: sqlite3.Connection,
     statuses: list[CaseParseStatus],
 ) -> None:
     """Replace the case-level parser diagnostics table."""
-    con.execute("DROP TABLE IF EXISTS salaries_case_status")
+    con.execute("DROP TABLE IF EXISTS cases_status")
     con.execute(
         """
-        CREATE TABLE salaries_case_status (
+        CREATE TABLE cases_status (
             case_pk INTEGER,
             institution_pk INTEGER,
             institution_name TEXT,
             status TEXT,
             reason TEXT,
-            parsed_candidate_rows INTEGER
+            parsed_candidate_rows INTEGER,
+            requested_more_time INTEGER,
+            asked_about_anonymization INTEGER,
+            requested_clarification INTEGER,
+            requested_processed_info_justification INTEGER,
+            fee_notice INTEGER,
+            transferred_or_not_competent INTEGER,
+            formal_deficiency_request INTEGER,
+            refusal_detected INTEGER,
+            unprocessed_attachment INTEGER
         )
         """
     )
     con.executemany(
         """
-        INSERT INTO salaries_case_status (
+        INSERT INTO cases_status (
             case_pk,
             institution_pk,
             institution_name,
             status,
             reason,
-            parsed_candidate_rows
+            parsed_candidate_rows,
+            requested_more_time,
+            asked_about_anonymization,
+            requested_clarification,
+            requested_processed_info_justification,
+            fee_notice,
+            transferred_or_not_competent,
+            formal_deficiency_request,
+            refusal_detected,
+            unprocessed_attachment
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -54,6 +73,15 @@ def write_case_statuses(
                 item.status,
                 item.reason,
                 item.parsed_candidate_rows,
+                int(item.flags.requested_more_time),
+                int(item.flags.asked_about_anonymization),
+                int(item.flags.requested_clarification),
+                int(item.flags.requested_processed_info_justification),
+                int(item.flags.fee_notice),
+                int(item.flags.transferred_or_not_competent),
+                int(item.flags.formal_deficiency_request),
+                int(item.flags.refusal_detected),
+                int(item.flags.unprocessed_attachment),
             )
             for item in statuses
         ],
@@ -184,6 +212,21 @@ def write_summary(con: sqlite3.Connection) -> None:
     )
     con.commit()
 
+
+
+def write_cases_status_csv(
+    con: sqlite3.Connection,
+    output_path: Path,
+) -> None:
+    """Export `cases_status` to a semicolon-delimited CSV file."""
+    cursor = con.execute(
+        """
+        SELECT *
+        FROM cases_status
+        ORDER BY case_pk
+        """
+    )
+    _write_cursor_csv(cursor, output_path)
 
 def write_extracted_csv(
     con: sqlite3.Connection,

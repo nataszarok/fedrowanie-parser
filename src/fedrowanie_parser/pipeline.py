@@ -1,5 +1,6 @@
 """Extraction orchestration and semantic enrichment."""
 from __future__ import annotations
+from dataclasses import replace
 import re
 from .models import CaseParseStatus, ExtractionResult, SalaryRow, SourceCase
 from .constants import (
@@ -19,6 +20,7 @@ __all__ = [
 
 # Public package APIs are intentionally imported wholesale; each module defines __all__.
 from .processing.api import *
+from .processing.case_flags import classify_case_flags
 from .parsing.tables import *
 from .parsing.layouts import *
 from .parsing.plain_text import *
@@ -32,6 +34,10 @@ def extract_cases(cases: list[SourceCase]) -> ExtractionResult:
 
     for case in cases:
         doc, meta = recipient_document(case.text)
+        flags = classify_case_flags(
+            doc,
+            has_unprocessed_attachment=bool(case.unprocessed_attachments),
+        )
 
         if not meta["thread_detected"]:
             statuses.append(
@@ -42,6 +48,7 @@ def extract_cases(cases: list[SourceCase]) -> ExtractionResult:
                     status="NO_SUBSTANTIVE_DATA_DETECTED",
                     reason="recipient_thread_not_detected",
                     parsed_candidate_rows=0,
+                    flags=flags,
                 )
             )
             continue
@@ -55,6 +62,7 @@ def extract_cases(cases: list[SourceCase]) -> ExtractionResult:
                     status="NO_SUBSTANTIVE_DATA_DETECTED",
                     reason="no_substantive_recipient_reply",
                     parsed_candidate_rows=0,
+                    flags=flags,
                 )
             )
             continue
@@ -72,6 +80,13 @@ def extract_cases(cases: list[SourceCase]) -> ExtractionResult:
                 row.comment = comment
 
         status, reason = correspondence_status(doc, rows)
+        flags = replace(
+            flags,
+            refusal_detected=(
+                "REFUSAL" in status
+                or "refusal" in (reason or "").lower()
+            ),
+        )
         if status.startswith("INDIVIDUAL_ANNUAL_2025"):
             accepted.extend(rows)
 
@@ -83,6 +98,7 @@ def extract_cases(cases: list[SourceCase]) -> ExtractionResult:
                 status=status,
                 reason=reason,
                 parsed_candidate_rows=len(rows),
+                flags=flags,
             )
         )
 
@@ -572,7 +588,3 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
                 r.doctor_initials=ini
 
     return validate_case_rows(final_rows)
-
-
-
-
