@@ -5,23 +5,25 @@ from typing import Optional
 
 @dataclass
 class SalaryRow:
+    """Normalized physician compensation record produced by the parser."""
+
     case_pk: int
     institution_pk: Optional[int]
-    placowka: str
-    nazwa: str
-    specjalizacja: str
-    typ_umowy: str
-    netto: Optional[float]
-    brutto: Optional[float]
-    strona: Optional[int]
+    institution_name: str
+    source_name: str
+    specialization: str
+    contract_type: str
+    net_compensation: Optional[float]
+    gross_compensation: Optional[float]
+    page_number: Optional[int]
     parser: str
-    pewnosc: str
+    confidence: str
     raw_row: str
-    komentarz: str = ''
-    jednostka_oddzial: str = ''
-    imie_nazwisko: str = ''
-    stanowisko_status: str = ''
-    inicjaly: str = ''
+    comment: str = ''
+    organizational_unit: str = ''
+    doctor_name: str = ''
+    doctor_status: str = ''
+    doctor_initials: str = ''
 
 @dataclass(frozen=True)
 class SourceCase:

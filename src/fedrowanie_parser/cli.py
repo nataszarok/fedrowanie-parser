@@ -43,7 +43,7 @@ def main() -> None:
     write_extracted_csv(con, Path(args.rows_csv))
     write_summary_csv(con, Path(args.summary_csv))
     institution_count = len({
-        (row.institution_pk, row.placowka)
+        (row.institution_pk, row.institution_name)
         for row in result.rows
     })
     print(

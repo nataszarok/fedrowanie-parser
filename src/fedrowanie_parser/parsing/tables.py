@@ -37,7 +37,7 @@ __all__ = [
 
 
 
-def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str, inherited_contract: str='', inherited_kind: str='brutto', inherited_spec: str='') -> list[SalaryRow]:
+def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], institution_name: str, page_no: int, page: str, inherited_contract: str='', inherited_kind: str='brutto', inherited_spec: str='') -> list[SalaryRow]:
     """Parse structured Markdown/OCR tables into salary-row candidates."""
     lines = page.splitlines()
     rows: list[SalaryRow] = []
@@ -136,7 +136,7 @@ def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka:
             paid_2025 = [(col, h, tok, val) for col, h, tok, val in candidates if re.search('(?i)wynagrodzen(?:ie|ia).*wypłacone.*2025|wyplacone.*2025', h)]
             if paid_2025:
                 _, _, _, paid_val = paid_2025[-1]
-                rows.append(SalaryRow(case_pk, institution_pk, placowka, label_for_row(idx, name), spec, row_contract, None, paid_val, page_no, 'markdown-paid-2025', 'wysoka', raw_clean))
+                rows.append(SalaryRow(case_pk, institution_pk, institution_name, label_for_row(idx, name), spec, row_contract, None, paid_val, page_no, 'markdown-paid-2025', 'wysoka', raw_clean))
                 i += 1
                 continue
             total_gross = [(col, h, tok, val) for col, h, tok, val in candidates if re.search('(?i)łącznie.*brutto|lacznie.*brutto', h)]
@@ -144,7 +144,7 @@ def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka:
                 _, _, _, total_val = total_gross[-1]
                 inferred = infer_contract_from_multi_columns(headers_clean, rcells) if infer_contract_from_multi_columns is not None else None
                 total_contract = inferred['contract_type'] if inferred else row_contract
-                rows.append(SalaryRow(case_pk, institution_pk, placowka, label_for_row(idx, name), spec, total_contract, None, total_val, page_no, 'markdown-total-gross', 'wysoka', raw_clean))
+                rows.append(SalaryRow(case_pk, institution_pk, institution_name, label_for_row(idx, name), spec, total_contract, None, total_val, page_no, 'markdown-total-gross', 'wysoka', raw_clean))
                 i += 1
                 continue
             # Separate contract-specific amount columns take precedence over the
@@ -153,7 +153,7 @@ def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka:
             split_contracts = split_multi_contract_amounts(headers_clean, rcells) if split_multi_contract_amounts is not None else []
             if split_contracts:
                 for ct, val in split_contracts:
-                    rows.append(SalaryRow(case_pk, institution_pk, placowka, label_for_row(idx, name), spec, ct, None, val, page_no, 'markdown-multi-contract', 'wysoka', raw_clean))
+                    rows.append(SalaryRow(case_pk, institution_pk, institution_name, label_for_row(idx, name), spec, ct, None, val, page_no, 'markdown-multi-contract', 'wysoka', raw_clean))
                 i += 1
                 continue
 
@@ -168,7 +168,7 @@ def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka:
                 if gross_val is None and net_val is None:
                     pass
                 else:
-                    rows.append(SalaryRow(case_pk, institution_pk, placowka, label_for_row(idx, name), spec, row_contract, net_val, gross_val, page_no, 'markdown-net-gross', 'wysoka', raw_clean))
+                    rows.append(SalaryRow(case_pk, institution_pk, institution_name, label_for_row(idx, name), spec, row_contract, net_val, gross_val, page_no, 'markdown-net-gross', 'wysoka', raw_clean))
                     i += 1
                     continue
             contract_candidates = []
@@ -178,13 +178,13 @@ def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka:
                     contract_candidates.append((ct, val))
             if contract_candidates:
                 for ct, val in contract_candidates:
-                    rows.append(SalaryRow(case_pk, institution_pk, placowka, label_for_row(idx, name), spec, ct, None, val, page_no, 'markdown-multi-contract', 'wysoka', raw_clean))
+                    rows.append(SalaryRow(case_pk, institution_pk, institution_name, label_for_row(idx, name), spec, ct, None, val, page_no, 'markdown-multi-contract', 'wysoka', raw_clean))
                 i += 1
                 continue
             vals = [x[3] for x in candidates]
             chosen = max(vals)
             kind = amount_kind(' '.join(headers))
-            rows.append(SalaryRow(case_pk, institution_pk, placowka, label_for_row(idx, name), spec, row_contract, chosen if kind == 'netto' else None, chosen if kind == 'brutto' else None, page_no, 'markdown-table', 'wysoka', raw_clean))
+            rows.append(SalaryRow(case_pk, institution_pk, institution_name, label_for_row(idx, name), spec, row_contract, chosen if kind == 'netto' else None, chosen if kind == 'brutto' else None, page_no, 'markdown-table', 'wysoka', raw_clean))
             i += 1
         continue
     existing_raw = {norm_space(r.raw_row) for r in rows}
@@ -211,7 +211,7 @@ def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka:
             spec = current_section
             if generic:
                 spec = f'{current_section} — {label}' if current_section else label
-            rows.append(SalaryRow(case_pk, institution_pk, placowka, name, spec, ct, None, val, page_no, 'markdown-no-header-4col', 'wysoka', rc))
+            rows.append(SalaryRow(case_pk, institution_pk, institution_name, name, spec, ct, None, val, page_no, 'markdown-no-header-4col', 'wysoka', rc))
             existing_raw.add(rc)
             continue
         if re.search('(?i)\\b(?:ODDZIAŁ|PRACOWNIA|PORADNIA|NOCNA\\s+I\\s+ŚWIĄTECZNA\\s+OPIEKA)\\b', rc):
@@ -234,7 +234,7 @@ def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka:
             continue
         spec = label or inherited_spec
         kind = inherited_kind
-        rows.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {idx}', spec, current_contract, val if kind == 'netto' else None, val if kind == 'brutto' else None, page_no, 'markdown-continuation', 'wysoka', rc))
+        rows.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {idx}', spec, current_contract, val if kind == 'netto' else None, val if kind == 'brutto' else None, page_no, 'markdown-continuation', 'wysoka', rc))
     existing_raw = {norm_space(r.raw_row) for r in rows}
     section_contract = inherited_contract
     for raw in lines:
@@ -253,7 +253,7 @@ def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka:
             continue
         if vals[0] in (2024.0, 2025.0, 2026.0):
             continue
-        rows.append(SalaryRow(case_pk, institution_pk, placowka, label, label, section_contract, None, vals[0], page_no, 'markdown-two-col-continuation', 'wysoka', rc))
+        rows.append(SalaryRow(case_pk, institution_pk, institution_name, label, label, section_contract, None, vals[0], page_no, 'markdown-two-col-continuation', 'wysoka', rc))
         existing_raw.add(rc)
     for i, raw in enumerate(lines):
         ctx = ' '.join(lines[max(0, i - 8):i + 1]).lower()
@@ -280,10 +280,10 @@ def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka:
             for rr, mv0, mv1 in parallel_buf:
                 if mv0:
                     left_no += 1
-                    rows.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz UoP {left_no}', '', 'umowa o pracę', None, mv0[0], page_no, 'markdown-parallel-money-columns', 'wysoka', rr))
+                    rows.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz UoP {left_no}', '', 'umowa o pracę', None, mv0[0], page_no, 'markdown-parallel-money-columns', 'wysoka', rr))
                 if mv1:
                     right_no += 1
-                    rows.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz Kontrakt {right_no}', '', 'kontrakt/cywilnoprawna', None, mv1[0], page_no, 'markdown-parallel-money-columns', 'wysoka', rr))
+                    rows.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz Kontrakt {right_no}', '', 'kontrakt/cywilnoprawna', None, mv1[0], page_no, 'markdown-parallel-money-columns', 'wysoka', rr))
         break
     existing_raw = {norm_space(r.raw_row) for r in rows}
     empty_lp = re.compile('^\\|\\s*\\|\\s*(?P<label>[^|]+?)\\s*\\|\\s*(?P<amount>\\d{1,3}(?:[ .]\\d{3})*(?:[,.]\\d{1,2})|\\d{4,7}(?:[,.]\\d{1,2}))\\s*(?:zł)?\\s*\\|?\\s*$', re.I)
@@ -293,7 +293,7 @@ def parse_markdown_tables(case_pk: int, institution_pk: Optional[int], placowka:
             continue
         vals = money_cells(m.group('amount'))
         if vals and vals[0][1] > 0:
-            rows.append(SalaryRow(case_pk, institution_pk, placowka, norm_space(m.group('label')), '', current_contract, None, vals[0][1], page_no, 'markdown-empty-lp', 'wysoka', norm_space(raw)))
+            rows.append(SalaryRow(case_pk, institution_pk, institution_name, norm_space(m.group('label')), '', current_contract, None, vals[0][1], page_no, 'markdown-empty-lp', 'wysoka', norm_space(raw)))
     return rows
 
 

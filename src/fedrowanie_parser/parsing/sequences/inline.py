@@ -30,7 +30,7 @@ __all__ = [
 
 
 
-def parse_numbered_named_inline_salary(case_pk, institution_pk, placowka, page_no, page):
+def parse_numbered_named_inline_salary(case_pk, institution_pk, institution_name, page_no, page):
     """Parse numbered named inline salary layouts into salary-row candidates."""
     out = []
     for line in page.splitlines():
@@ -45,10 +45,10 @@ def parse_numbered_named_inline_salary(case_pk, institution_pk, placowka, page_n
         val = parse_money(m.group(3))
         if val is None or val <= 0:
             continue
-        out.append(SalaryRow(case_pk, institution_pk, placowka, norm_space(m.group(2)), '', '', None, val, page_no, 'numbered-named-inline', 'wysoka', raw))
+        out.append(SalaryRow(case_pk, institution_pk, institution_name, norm_space(m.group(2)), '', '', None, val, page_no, 'numbered-named-inline', 'wysoka', raw))
     return out if len(out) >= 3 else []
 
-def parse_lekarz_inline_salary(case_pk, institution_pk, placowka, page_no, page):
+def parse_lekarz_inline_salary(case_pk, institution_pk, institution_name, page_no, page):
     """Parse lekarz inline salary layouts into salary-row candidates."""
     out = []
     for line in page.splitlines():
@@ -59,10 +59,10 @@ def parse_lekarz_inline_salary(case_pk, institution_pk, placowka, page_no, page)
         val = parse_money(m.group(2))
         if val is None or val <= 0:
             continue
-        out.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {m.group(1)}', norm_space(m.group(3)), '', None, val, page_no, 'lekarz-inline-specialty', 'wysoka', raw))
+        out.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {m.group(1)}', norm_space(m.group(3)), '', None, val, page_no, 'lekarz-inline-specialty', 'wysoka', raw))
     return out if len(out) >= 3 else []
 
-def parse_embedded_numbered_salary_list(case_pk, institution_pk, placowka, page_no, page, full_doc=''):
+def parse_embedded_numbered_salary_list(case_pk, institution_pk, institution_name, page_no, page, full_doc=''):
     """Parse embedded numbered salary list layouts into salary-row candidates."""
     context = full_doc or page
     if not re.search('(?i)wynagrod', context) or '2025' not in context:
@@ -81,11 +81,11 @@ def parse_embedded_numbered_salary_list(case_pk, institution_pk, placowka, page_
         val = parse_money(am.group(0))
         if val is None or val <= 0:
             continue
-        out.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {m.group(1)}', label, '', None, val, page_no, 'embedded-numbered-salary-list', 'wysoka', norm_space(m.group(0))))
+        out.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {m.group(1)}', label, '', None, val, page_no, 'embedded-numbered-salary-list', 'wysoka', norm_space(m.group(0))))
     explicit = bool(re.search('(?i)poniżej przedstawiam listę|ponizej przedstawiam liste', page))
     return out if len(out) >= 5 or (explicit and len(out) >= 3) else []
 
-def parse_specialty_amount_lines(case_pk, institution_pk, placowka, page_no, page):
+def parse_specialty_amount_lines(case_pk, institution_pk, institution_name, page_no, page):
     """Parse specialty amount lines layouts into salary-row candidates."""
     annual_ctx=bool(
         re.search(r'(?is)zestawienie\s+wynagrodze[nń]',page)
@@ -121,12 +121,12 @@ def parse_specialty_amount_lines(case_pk, institution_pk, placowka, page_no, pag
         if val is None or val<=0: continue
         spec=norm_space(m.group(1)).strip(' -–—_+*|')
         out.append(SalaryRow(
-            case_pk,institution_pk,placowka,f'Lekarz {len(out)+1}',spec,'',
+            case_pk,institution_pk,institution_name,f'Lekarz {len(out)+1}',spec,'',
             None,val,page_no,'specialty-amount-lines','wysoka',raw
         ))
     return out if len(out)>=5 else []
 
-def parse_explicit_annual_prose_salary(case_pk, institution_pk, placowka, page_no, page):
+def parse_explicit_annual_prose_salary(case_pk, institution_pk, institution_name, page_no, page):
     """Parse explicit annual prose salary layouts into salary-row candidates."""
     has_numbered_context=bool(re.search(r'(?is)zestawienie.{0,100}wynagrodze[nń].{0,100}2025', page))
     has_single_explicit=bool(re.search(
@@ -157,7 +157,7 @@ def parse_explicit_annual_prose_salary(case_pk, institution_pk, placowka, page_n
             if re.search(r'(?i)art\.|ust\.|telefon|adres|data:',label): continue
             val=parse_money(token)
             if val is None or val<=0: continue
-            out.append(SalaryRow(case_pk,institution_pk,placowka,norm_space(label[:140]),'','',
+            out.append(SalaryRow(case_pk,institution_pk,institution_name,norm_space(label[:140]),'','',
                                  None,val,page_no,'explicit-annual-prose-salary','wysoka',
                                  f'{m.group(1)} | {norm_space(chunk[:220])}'))
         if len(out)>=3: return out
@@ -171,11 +171,11 @@ def parse_explicit_annual_prose_salary(case_pk, institution_pk, placowka, page_n
         token=m.group(2)+((','+m.group(3)) if m.group(3) else '')
         val=parse_money(token); label=norm_space(m.group(1)).strip(' .,:;-')
         if val is not None and val>0 and re.search(r'(?i)lekarz|dyrektor|ordynator|kierownik',label):
-            return [SalaryRow(case_pk,institution_pk,placowka,label,'','',None,val,page_no,
+            return [SalaryRow(case_pk,institution_pk,institution_name,label,'','',None,val,page_no,
                               'explicit-annual-prose-salary','wysoka',norm_space(m.group(0)))]
     return []
 
-def parse_body_lekarz_number_amount(case_pk, institution_pk, placowka, page_no, page):
+def parse_body_lekarz_number_amount(case_pk, institution_pk, institution_name, page_no, page):
     """Parse body lekarz number amount layouts into salary-row candidates."""
     if not re.search(r'(?is)(?:wynagrodze[nń]|zarobk).{0,260}2025|2025.{0,260}(?:wynagrodze[nń]|zarobk)', page):
         return []
@@ -189,7 +189,7 @@ def parse_body_lekarz_number_amount(case_pk, institution_pk, placowka, page_no, 
         if key in seen: return
         seen.add(key)
         out.append(SalaryRow(
-            case_pk,institution_pk,placowka,norm_space(name),"","",
+            case_pk,institution_pk,institution_name,norm_space(name),"","",
             val if kind=='netto' else None,
             None if kind=='netto' else val,
             page_no,"body-lekarz-number-amount","wysoka",raw
@@ -255,7 +255,7 @@ def parse_body_lekarz_number_amount(case_pk, institution_pk, placowka, page_no, 
             break
     return out if len(out)>=2 else []
 
-def parse_body_lp_amount(case_pk, institution_pk, placowka, page_no, page):
+def parse_body_lp_amount(case_pk, institution_pk, institution_name, page_no, page):
     """Parse body lp amount layouts into salary-row candidates."""
     if not re.search(r'(?i)2025', page):
         return []
@@ -276,12 +276,12 @@ def parse_body_lp_amount(case_pk, institution_pk, placowka, page_no, page):
         if val is None or val<=0:
             continue
         out.append(SalaryRow(
-            case_pk,institution_pk,placowka,f"Lekarz {m.group(1)}","","",
+            case_pk,institution_pk,institution_name,f"Lekarz {m.group(1)}","","",
             None,val,page_no,"body-lp-amount","wysoka",raw
         ))
     return out if len(out)>=2 else []
 
-def parse_annual_amount_contract_lines(case_pk, institution_pk, placowka, page_no, page):
+def parse_annual_amount_contract_lines(case_pk, institution_pk, institution_name, page_no, page):
     """Parse annual amount contract lines layouts into salary-row candidates."""
     if not (re.search(r'(?i)wynagrodzenia\s+lekarzy\s+za\s+rok\s+2025', page)
             and re.search(r'(?i)bez\s+imion\s+i\s+nazwisk|bez\s+.*nazwisk', page)):
@@ -293,11 +293,11 @@ def parse_annual_amount_contract_lines(case_pk, institution_pk, placowka, page_n
         if len(vals)==1 and ct and re.search(r'(?i)umow|kontrakt|cywilnopraw',raw) and not is_metadata_context(raw):
             candidates.append((raw,vals[0],ct))
     if len(candidates)<3: return []
-    return [SalaryRow(case_pk,institution_pk,placowka,f'Lekarz {i}','','' if not ct else ct,None,val,page_no,
+    return [SalaryRow(case_pk,institution_pk,institution_name,f'Lekarz {i}','','' if not ct else ct,None,val,page_no,
                       'annual-amount-contract-lines','wysoka',norm_space(raw))
             for i,(raw,val,ct) in enumerate(candidates,1)]
 
-def parse_contract_practice_cost_list(case_pk, institution_pk, placowka, page_no, page):
+def parse_contract_practice_cost_list(case_pk, institution_pk, institution_name, page_no, page):
     """Parse contract practice cost list layouts into salary-row candidates."""
     m=re.search(r'(?is)na\s+kontraktach\s+zatrudnionych\s+by[łl]o\s+(\w+|\d+)\s+lekarzy.{0,220}?koszt.{0,120}?2025.{0,180}?nast[eę]puj[aą]co\s*:',page)
     if not m: return []
@@ -310,11 +310,11 @@ def parse_contract_practice_cost_list(case_pk, institution_pk, placowka, page_no
     for mm in pat.finditer(block):
         label=norm_space(mm.group(1)); val=parse_money(mm.group(2))
         if val and val>=1000:
-            out.append(SalaryRow(case_pk,institution_pk,placowka,label,'','kontrakt/cywilnoprawna',None,val,page_no,
+            out.append(SalaryRow(case_pk,institution_pk,institution_name,label,'','kontrakt/cywilnoprawna',None,val,page_no,
                                  'contract-practice-cost-list','wysoka',norm_space(mm.group(0))))
     return out if len(out)>=2 else []
 
-def parse_single_anonymized_annual_amount(case_pk, institution_pk, placowka, page_no, page):
+def parse_single_anonymized_annual_amount(case_pk, institution_pk, institution_name, page_no, page):
     """Parse single anonymized annual amount layouts into salary-row candidates."""
     if not (re.search(r'(?i)zanonimizowane\s+dane\s+osobowe',page)
             and re.search(r'(?is)wynagrodzenie\s+brutto.{0,60}(?:r[o0]k|tok)\s+2025',page)):
@@ -323,10 +323,10 @@ def parse_single_anonymized_annual_amount(case_pk, institution_pk, placowka, pag
     if not m: return []
     val=parse_money(m.group(1))
     if not val or val<1000:return []
-    return [SalaryRow(case_pk,institution_pk,placowka,'Lekarz 1','','',None,val,page_no,
+    return [SalaryRow(case_pk,institution_pk,institution_name,'Lekarz 1','','',None,val,page_no,
                       'single-anonymized-annual-amount','wysoka',norm_space(m.group(0)))]
 
-def parse_annual_named_colon_amount_list(case_pk, institution_pk, placowka, page_no, page):
+def parse_annual_named_colon_amount_list(case_pk, institution_pk, institution_name, page_no, page):
     """Parse annual named colon amount list layouts into salary-row candidates."""
     if not re.search(r'(?is)(?:zestawienie|wykaz|lista).{0,120}wynagrodze[nń].{0,120}(?:lekarz|2025)|wynagrodze[nń].{0,120}lekarz.{0,120}2025', page):
         return []
@@ -349,7 +349,7 @@ def parse_annual_named_colon_amount_list(case_pk, institution_pk, placowka, page
         val=parse_money(token)
         if val is None or val<=0:
             continue
-        out.append(SalaryRow(case_pk,institution_pk,placowka,name,'','',None,val,page_no,'annual-named-colon-amount','wysoka',raw))
+        out.append(SalaryRow(case_pk,institution_pk,institution_name,name,'','',None,val,page_no,'annual-named-colon-amount','wysoka',raw))
     return out if len(out)>=3 else []
 
 

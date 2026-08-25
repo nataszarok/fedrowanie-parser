@@ -27,7 +27,7 @@ def write_case_statuses(
         CREATE TABLE salaries_case_status (
             case_pk INTEGER,
             institution_pk INTEGER,
-            placówka TEXT,
+            institution_name TEXT,
             status TEXT,
             reason TEXT,
             parsed_candidate_rows INTEGER
@@ -39,7 +39,7 @@ def write_case_statuses(
         INSERT INTO salaries_case_status (
             case_pk,
             institution_pk,
-            placówka,
+            institution_name,
             status,
             reason,
             parsed_candidate_rows
@@ -72,21 +72,21 @@ def write_extracted_rows(
         CREATE TABLE salaries_extracted (
             case_pk INTEGER,
             institution_pk INTEGER,
-            placówka TEXT,
-            Nazwa TEXT,
-            "imię i nazwisko" TEXT,
-            "inicjały" TEXT,
-            specjalizacja TEXT,
-            "stanowisko/status" TEXT,
-            "jednostka/oddział" TEXT,
-            "typ umowy" TEXT,
-            "wynagrodzenie netto" REAL,
-            "wynagrodzenie brutto" REAL,
-            strona INTEGER,
+            institution_name TEXT,
+            source_name TEXT,
+            doctor_name TEXT,
+            doctor_initials TEXT,
+            specialization TEXT,
+            doctor_status TEXT,
+            organizational_unit TEXT,
+            contract_type TEXT,
+            net_compensation REAL,
+            gross_compensation REAL,
+            page_number INTEGER,
             parser TEXT,
-            pewność TEXT,
+            confidence TEXT,
             raw_row TEXT,
-            komentarz TEXT
+            comment TEXT
         )
         """
     )
@@ -95,21 +95,21 @@ def write_extracted_rows(
         INSERT INTO salaries_extracted (
             case_pk,
             institution_pk,
-            placówka,
-            Nazwa,
-            "imię i nazwisko",
-            "inicjały",
-            specjalizacja,
-            "stanowisko/status",
-            "jednostka/oddział",
-            "typ umowy",
-            "wynagrodzenie netto",
-            "wynagrodzenie brutto",
-            strona,
+            institution_name,
+            source_name,
+            doctor_name,
+            doctor_initials,
+            specialization,
+            doctor_status,
+            organizational_unit,
+            contract_type,
+            net_compensation,
+            gross_compensation,
+            page_number,
             parser,
-            pewność,
+            confidence,
             raw_row,
-            komentarz
+            comment
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
@@ -117,21 +117,21 @@ def write_extracted_rows(
             (
                 row.case_pk,
                 row.institution_pk,
-                row.placowka,
-                row.nazwa,
-                row.imie_nazwisko,
-                row.inicjaly,
-                row.specjalizacja,
-                row.stanowisko_status,
-                row.jednostka_oddzial,
-                row.typ_umowy,
-                row.netto,
-                row.brutto,
-                row.strona,
+                row.institution_name,
+                row.source_name,
+                row.doctor_name,
+                row.doctor_initials,
+                row.specialization,
+                row.doctor_status,
+                row.organizational_unit,
+                row.contract_type,
+                row.net_compensation,
+                row.gross_compensation,
+                row.page_number,
                 row.parser,
-                row.pewnosc,
+                row.confidence,
                 row.raw_row,
-                row.komentarz,
+                row.comment,
             )
             for row in rows
         ],
@@ -147,39 +147,39 @@ def write_summary(con: sqlite3.Connection) -> None:
         CREATE TABLE salaries_summary AS
         SELECT
             institution_pk,
-            placówka,
-            COUNT(*) AS liczba_rekordów,
+            institution_name,
+            COUNT(*) AS record_count,
             ROUND(
-                SUM(COALESCE("wynagrodzenie brutto", "wynagrodzenie netto")),
+                SUM(COALESCE(gross_compensation, net_compensation)),
                 2
-            ) AS suma,
+            ) AS total_compensation,
             ROUND(
-                MAX(COALESCE("wynagrodzenie brutto", "wynagrodzenie netto")),
+                MAX(COALESCE(gross_compensation, net_compensation)),
                 2
-            ) AS max,
+            ) AS max_compensation,
             SUM(
                 CASE
                     WHEN COALESCE(
-                        "wynagrodzenie brutto",
-                        "wynagrodzenie netto"
+                        gross_compensation,
+                        net_compensation
                     ) > 500000
                     THEN 1
                     ELSE 0
                 END
-            ) AS liczba_powyżej_500k,
+            ) AS count_above_500k,
             SUM(
                 CASE
                     WHEN COALESCE(
-                        "wynagrodzenie brutto",
-                        "wynagrodzenie netto"
+                        gross_compensation,
+                        net_compensation
                     ) > 1000000
                     THEN 1
                     ELSE 0
                 END
-            ) AS liczba_powyżej_1mln
+            ) AS count_above_1m
         FROM salaries_extracted
-        GROUP BY institution_pk, placówka
-        ORDER BY suma DESC
+        GROUP BY institution_pk, institution_name
+        ORDER BY total_compensation DESC
         """
     )
     con.commit()
@@ -194,7 +194,7 @@ def write_extracted_csv(
         """
         SELECT *
         FROM salaries_extracted
-        ORDER BY placówka, case_pk, strona, rowid
+        ORDER BY institution_name, case_pk, page_number, rowid
         """
     )
     _write_cursor_csv(cursor, output_path)

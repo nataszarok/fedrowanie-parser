@@ -28,7 +28,7 @@ __all__ = [
 
 
 
-def parse_vertical_label_amount_pairs(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str, inherited_contract: str='') -> list[SalaryRow]:
+def parse_vertical_label_amount_pairs(case_pk: int, institution_pk: Optional[int], institution_name: str, page_no: int, page: str, inherited_contract: str='') -> list[SalaryRow]:
     """Parse vertical label amount pairs layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     pairs = []
@@ -53,9 +53,9 @@ def parse_vertical_label_amount_pairs(case_pk: int, institution_pk: Optional[int
         pairs.append((label, vals[0], f'{label} | {amount_line}'))
     if len(pairs) < 5:
         return []
-    return [SalaryRow(case_pk, institution_pk, placowka, label, '', inherited_contract, None, val, page_no, 'vertical-label-amount', 'wysoka', raw) for label, val, raw in pairs]
+    return [SalaryRow(case_pk, institution_pk, institution_name, label, '', inherited_contract, None, val, page_no, 'vertical-label-amount', 'wysoka', raw) for label, val, raw in pairs]
 
-def parse_vertical_indexname_amount(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str, inherited_contract: str='') -> list[SalaryRow]:
+def parse_vertical_indexname_amount(case_pk: int, institution_pk: Optional[int], institution_name: str, page_no: int, page: str, inherited_contract: str='') -> list[SalaryRow]:
     """Parse vertical indexname amount layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     rows = []
@@ -76,12 +76,12 @@ def parse_vertical_indexname_amount(case_pk: int, institution_pk: Optional[int],
         val = vals[0]
         if val <= 0:
             continue
-        rows.append(SalaryRow(case_pk, institution_pk, placowka, name, '', inherited_contract, None, val, page_no, 'vertical-index-name-amount', 'wysoka', f'{m.group(1)} {name} | {nxt}'))
+        rows.append(SalaryRow(case_pk, institution_pk, institution_name, name, '', inherited_contract, None, val, page_no, 'vertical-index-name-amount', 'wysoka', f'{m.group(1)} {name} | {nxt}'))
     if len(rows) < 5:
         return []
     return rows
 
-def parse_vertical_index_code_label_amount(case_pk, institution_pk, placowka, page_no, page):
+def parse_vertical_index_code_label_amount(case_pk, institution_pk, institution_name, page_no, page):
     """Parse vertical index code label amount layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     out = []
@@ -93,7 +93,7 @@ def parse_vertical_index_code_label_amount(case_pk, institution_pk, placowka, pa
             vals = money_values(lines[i + 2])
             if len(vals) == 1 and re.search('(?i)lekarz|kontrakt|umow|kartotek|wynagrod|asystent|kierownik|stażysta|stazysta|rezydent', label):
                 ct = detect_contract(label)
-                out.append(SalaryRow(case_pk, institution_pk, placowka, m.group(2), label, ct, None, vals[0], page_no, 'vertical-index-code-label-amount', 'wysoka', ' | '.join(lines[i:i + 3])))
+                out.append(SalaryRow(case_pk, institution_pk, institution_name, m.group(2), label, ct, None, vals[0], page_no, 'vertical-index-code-label-amount', 'wysoka', ' | '.join(lines[i:i + 3])))
                 i += 3
                 continue
         if re.fullmatch('\\d{1,4}', lines[i]) and i + 2 < len(lines):
@@ -101,13 +101,13 @@ def parse_vertical_index_code_label_amount(case_pk, institution_pk, placowka, pa
             vals = money_values(lines[i + 2])
             if len(vals) == 1 and re.search('(?i)lekarz|kontrakt|umow|kartotek|wynagrod|asystent|kierownik|stażysta|stazysta|rezydent', label):
                 ct = detect_contract(label)
-                out.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {lines[i]}', label, ct, None, vals[0], page_no, 'vertical-index-code-label-amount', 'wysoka', ' | '.join(lines[i:i + 3])))
+                out.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {lines[i]}', label, ct, None, vals[0], page_no, 'vertical-index-code-label-amount', 'wysoka', ' | '.join(lines[i:i + 3])))
                 i += 3
                 continue
         i += 1
     return out if len(out) >= 3 else []
 
-def parse_vertical_named_salary_table(case_pk, institution_pk, placowka, page_no, page):
+def parse_vertical_named_salary_table(case_pk, institution_pk, institution_name, page_no, page):
     """Parse vertical named salary table layouts into salary-row candidates."""
     if not (re.search('(?i)imię i nazwisko|imie i nazwisko', page) and re.search('(?i)kwota wynagrodzenia.*2025', page)):
         return []
@@ -119,13 +119,13 @@ def parse_vertical_named_salary_table(case_pk, institution_pk, placowka, page_no
             name = lines[i + 1]
             vals = money_values(lines[i + 2])
             if re.search('[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]', name) and len(vals) == 1 and (vals[0] > 0):
-                out.append(SalaryRow(case_pk, institution_pk, placowka, name, '', '', None, vals[0], page_no, 'vertical-named-salary-table', 'wysoka', ' | '.join(lines[i:i + 3])))
+                out.append(SalaryRow(case_pk, institution_pk, institution_name, name, '', '', None, vals[0], page_no, 'vertical-named-salary-table', 'wysoka', ' | '.join(lines[i:i + 3])))
                 i += 3
                 continue
         i += 1
     return out if len(out) >= 3 else []
 
-def parse_vertical_role_named_amount(case_pk, institution_pk, placowka, page_no, page):
+def parse_vertical_role_named_amount(case_pk, institution_pk, institution_name, page_no, page):
     """Parse vertical role named amount layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     out = []
@@ -154,7 +154,7 @@ def parse_vertical_role_named_amount(case_pk, institution_pk, placowka, page_no,
                 if len(vals) == 1 and re.fullmatch('\\d[\\d ]*(?:,\\d{1,2})?', lines[j]):
                     name = norm_space(' '.join(names))
                     if name:
-                        out.append(SalaryRow(case_pk, institution_pk, placowka, name, role, '', None, vals[0], page_no, 'vertical-role-named-amount', 'wysoka', f'{role} | {idx} | {name} | {lines[j]}'))
+                        out.append(SalaryRow(case_pk, institution_pk, institution_name, name, role, '', None, vals[0], page_no, 'vertical-role-named-amount', 'wysoka', f'{role} | {idx} | {name} | {lines[j]}'))
                     i = j + 1
                     found = True
                     break
@@ -166,7 +166,7 @@ def parse_vertical_role_named_amount(case_pk, institution_pk, placowka, page_no,
         i += 1
     return out
 
-def parse_two_section_vertical_salary(case_pk, institution_pk, placowka, page_no, page):
+def parse_two_section_vertical_salary(case_pk, institution_pk, institution_name, page_no, page):
     """Parse two section vertical salary layouts into salary-row candidates."""
     if not (re.search('(?i)wynagrodzenie lekarzy zatrudnionych', page) and re.search('(?i)umow[ęe] o prac[ęe]', page) and re.search('(?i)umow[ęe] cywilnoprawn', page)):
         return []
@@ -178,20 +178,20 @@ def parse_two_section_vertical_salary(case_pk, institution_pk, placowka, page_no
         if m:
             vals = money_values(lines[i + 2])
             if len(vals) == 1 and vals[0] > 0:
-                out.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {m.group(1)}', lines[i + 1], 'umowa o pracę', None, vals[0], page_no, 'two-section-vertical', 'wysoka', ' | '.join(lines[i:i + 3])))
+                out.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {m.group(1)}', lines[i + 1], 'umowa o pracę', None, vals[0], page_no, 'two-section-vertical', 'wysoka', ' | '.join(lines[i:i + 3])))
                 i += 3
                 continue
         idx = lines[i].rstrip('.')
         if re.fullmatch('\\d{1,4}', idx) and re.search('(?i)dyżur|dyzur|praca dzienna', lines[i + 1]):
             vals = money_values(lines[i + 2])
             if len(vals) == 1 and vals[0] > 0:
-                out.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {idx}', lines[i + 1], 'umowa cywilnoprawna', None, vals[0], page_no, 'two-section-vertical', 'wysoka', ' | '.join(lines[i:i + 3])))
+                out.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {idx}', lines[i + 1], 'umowa cywilnoprawna', None, vals[0], page_no, 'two-section-vertical', 'wysoka', ' | '.join(lines[i:i + 3])))
                 i += 3
                 continue
         i += 1
     return out if len(out) >= 5 else []
 
-def parse_numbered_amount_only_series(case_pk, institution_pk, placowka, page_no, page):
+def parse_numbered_amount_only_series(case_pk, institution_pk, institution_name, page_no, page):
     """Parse numbered amount only series layouts into salary-row candidates."""
     m = re.search('(?is)wynagrodzenia.{0,160}(?:kształtowały|ksztaltowaly|następująco|nastepujaco)\\s*:\\s*(.+)', page)
     if not m:
@@ -206,10 +206,10 @@ def parse_numbered_amount_only_series(case_pk, institution_pk, placowka, page_no
         val = parse_money(am.group(0))
         if val is None or val <= 0:
             continue
-        out.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {mm.group(1)}', '', '', None, val, page_no, 'numbered-amount-only-series', 'wysoka', norm_space(mm.group(0))))
+        out.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {mm.group(1)}', '', '', None, val, page_no, 'numbered-amount-only-series', 'wysoka', norm_space(mm.group(0))))
     return out if len(out) >= 5 else []
 
-def parse_parallel_name_amount_lists(case_pk: int, institution_pk: Optional[int], placowka: str, doc: str) -> list[SalaryRow]:
+def parse_parallel_name_amount_lists(case_pk: int, institution_pk: Optional[int], institution_name: str, doc: str) -> list[SalaryRow]:
     """Parse parallel name amount lists layouts into salary-row candidates."""
     text = norm_space(doc)
     m = re.search('(?is)imienna\\s+lista\\s+lekarzy.*?2025\\s*:?\\s*(.*?)łączne\\s+wynagrodzenie\\s+wypłacone\\s+w\\s*2025\\s*roku\\s*:?', text)
@@ -225,9 +225,9 @@ def parse_parallel_name_amount_lists(case_pk: int, institution_pk: Optional[int]
             amounts.append(val)
     if not names or len(names) != len(amounts):
         return []
-    return [SalaryRow(case_pk, institution_pk, placowka, name, '', '', None, val, None, 'parallel-name-amount-lists', 'wysoka', f'{i}. {name} | {val:.2f}') for i, (name, val) in enumerate(zip(names, amounts), 1)]
+    return [SalaryRow(case_pk, institution_pk, institution_name, name, '', '', None, val, None, 'parallel-name-amount-lists', 'wysoka', f'{i}. {name} | {val:.2f}') for i, (name, val) in enumerate(zip(names, amounts), 1)]
 
-def parse_parallel_doctor_amount_lists(case_pk, institution_pk, placowka, page_no, page):
+def parse_parallel_doctor_amount_lists(case_pk, institution_pk, institution_name, page_no, page):
     """Parse parallel doctor amount lists layouts into salary-row candidates."""
     m1=re.search(
         r'(?is)\bLekarze\s*:\s*(.+?)\bWynagrodzenia\s+lekarzy\s*:\s*(.+)',
@@ -291,7 +291,7 @@ def parse_parallel_doctor_amount_lists(case_pk, institution_pk, placowka, page_n
             unreadable.append((idx,name,part))
             continue
         row=SalaryRow(
-            case_pk,institution_pk,placowka,name,"","",
+            case_pk,institution_pk,institution_name,name,"","",
             None,val,page_no,"parallel-doctor-amount-lists","wysoka",
             f"{idx} | {name} | {part}"
         )
@@ -303,11 +303,11 @@ def parse_parallel_doctor_amount_lists(case_pk, institution_pk, placowka, page_n
     if unreadable:
         note="; ".join(f"poz. {i}: {n} / {raw}" for i,n,raw in unreadable)
         for r in out:
-            r.komentarz=(r.komentarz+"; " if r.komentarz else "") + \
+            r.comment=(r.comment+"; " if r.comment else "") + \
                 "Lista równoległa; pominięto nieczytelną pozycję OCR: " + note
     return out
 
-def parse_anonymous_amount_only_series(case_pk, institution_pk, placowka, page_no, page):
+def parse_anonymous_amount_only_series(case_pk, institution_pk, institution_name, page_no, page):
     """Parse anonymous amount only series layouts into salary-row candidates."""
     if not re.search(r'(?i)\b(?:kwoty\s+brutto|kwoty\s+netto)\s*:', page):
         return []
@@ -356,7 +356,7 @@ def parse_anonymous_amount_only_series(case_pk, institution_pk, placowka, page_n
     out=[]
     for idx,(val,raw) in enumerate(zip(vals,raws),1):
         out.append(SalaryRow(
-            case_pk,institution_pk,placowka,f"Lekarz {idx}","","",
+            case_pk,institution_pk,institution_name,f"Lekarz {idx}","","",
             val if is_netto else None,
             None if is_netto else val,
             page_no,"anonymous-amount-only-series","wysoka",raw

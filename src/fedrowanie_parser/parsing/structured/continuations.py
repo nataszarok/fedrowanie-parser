@@ -33,7 +33,7 @@ def page_context_contract(lines: list[str], pos: int, fallback: str='') -> str:
     chunk = '\n'.join(lines[max(0, pos - 12):pos + 1])
     return detect_contract(chunk, fallback)
 
-def parse_indexed_three_col_continuation(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str, inherited_contract: str='') -> list[SalaryRow]:
+def parse_indexed_three_col_continuation(case_pk: int, institution_pk: Optional[int], institution_name: str, page_no: int, page: str, inherited_contract: str='') -> list[SalaryRow]:
     """Parse indexed three col continuation layouts into salary-row candidates."""
     candidates = []
     for raw in page.splitlines():
@@ -57,10 +57,10 @@ def parse_indexed_three_col_continuation(case_pk: int, institution_pk: Optional[
         return []
     rows = []
     for idx, mid, val, raw in candidates:
-        rows.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {idx}', mid, inherited_contract, None, val, page_no, 'markdown-3col-continuation', 'wysoka', raw))
+        rows.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {idx}', mid, inherited_contract, None, val, page_no, 'markdown-3col-continuation', 'wysoka', raw))
     return rows
 
-def parse_indexed_single_salary_markdown(case_pk, institution_pk, placowka, page_no, page):
+def parse_indexed_single_salary_markdown(case_pk, institution_pk, institution_name, page_no, page):
     """Parse indexed single salary markdown layouts into salary-row candidates."""
     out = []
     for raw in page.splitlines():
@@ -86,10 +86,10 @@ def parse_indexed_single_salary_markdown(case_pk, institution_pk, placowka, page
         spec = norm_space(cc[2]) if len(cc) > 3 and j != 2 else ''
         if re.search('(?i)razem|suma|ogółem', name):
             continue
-        out.append(SalaryRow(case_pk, institution_pk, placowka, name, spec, '', None, val, page_no, 'indexed-single-salary-md', 'wysoka', norm_space(raw)))
+        out.append(SalaryRow(case_pk, institution_pk, institution_name, name, spec, '', None, val, page_no, 'indexed-single-salary-md', 'wysoka', norm_space(raw)))
     return out if len(out) >= 1 else []
 
-def parse_indexed_total_gross_continuation(case_pk, institution_pk, placowka, page_no, page):
+def parse_indexed_total_gross_continuation(case_pk, institution_pk, institution_name, page_no, page):
     """Parse indexed total gross continuation layouts into salary-row candidates."""
     out = []
     for raw in page.splitlines():
@@ -108,10 +108,10 @@ def parse_indexed_total_gross_continuation(case_pk, institution_pk, placowka, pa
         if len(lastvals) != 1 or lastvals[0] <= 0:
             continue
         spec = norm_space(cc[2])
-        out.append(SalaryRow(case_pk, institution_pk, placowka, codecell, spec, '', None, lastvals[0], page_no, 'indexed-total-gross-continuation', 'wysoka', norm_space(raw)))
+        out.append(SalaryRow(case_pk, institution_pk, institution_name, codecell, spec, '', None, lastvals[0], page_no, 'indexed-total-gross-continuation', 'wysoka', norm_space(raw)))
     return out
 
-def parse_salary_bracket_index_table(case_pk, institution_pk, placowka, page_no, page, full_doc):
+def parse_salary_bracket_index_table(case_pk, institution_pk, institution_name, page_no, page, full_doc):
     """Parse salary bracket index table layouts into salary-row candidates."""
     if not (
         re.search(r"(?i)<\s*500[ .]?000", full_doc)
@@ -156,7 +156,7 @@ def parse_salary_bracket_index_table(case_pk, institution_pk, placowka, page_no,
         # Normalny przypadek: jeden lekarz, jedna kwota w jednym koszyku.
         if len(vals) == 1:
             out.append(SalaryRow(
-                case_pk, institution_pk, placowka,
+                case_pk, institution_pk, institution_name,
                 f"Lekarz {idx}", spec, "kontrakt/cywilnoprawna",
                 None, vals[0], page_no,
                 "salary-bracket-index", "wysoka", raw
@@ -168,13 +168,13 @@ def parse_salary_bracket_index_table(case_pk, institution_pk, placowka, page_no,
             nxt = by_idx.get(idx + 1)
             if nxt and len(nxt[2]) == 0:
                 out.append(SalaryRow(
-                    case_pk, institution_pk, placowka,
+                    case_pk, institution_pk, institution_name,
                     f"Lekarz {idx}", spec, "kontrakt/cywilnoprawna",
                     None, vals[0], page_no,
                     "salary-bracket-index", "wysoka", raw
                 ))
                 out.append(SalaryRow(
-                    case_pk, institution_pk, placowka,
+                    case_pk, institution_pk, institution_name,
                     f"Lekarz {idx + 1}", nxt[1], "kontrakt/cywilnoprawna",
                     None, vals[1], page_no,
                     "salary-bracket-index", "wysoka",
@@ -184,7 +184,7 @@ def parse_salary_bracket_index_table(case_pk, institution_pk, placowka, page_no,
 
     return out
 
-def parse_parallel_index_amount_columns(case_pk, institution_pk, placowka, page_no, page):
+def parse_parallel_index_amount_columns(case_pk, institution_pk, institution_name, page_no, page):
     """Parse parallel index amount columns layouts into salary-row candidates."""
     out = []
     for raw in page.splitlines():
@@ -201,16 +201,16 @@ def parse_parallel_index_amount_columns(case_pk, institution_pk, placowka, page_
         a = money_values(c1) if money_only.fullmatch(c1) else []
         b = money_values(c3) if money_only.fullmatch(c3) else []
         if i1 and len(a) == 1 and (a[0] >= 1000):
-            out.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {i1.group()}', '', '', None, a[0], page_no, 'parallel-index-amount', 'wysoka', norm_space(raw)))
+            out.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {i1.group()}', '', '', None, a[0], page_no, 'parallel-index-amount', 'wysoka', norm_space(raw)))
         if i2 and len(b) == 1 and (b[0] >= 1000):
-            out.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {i2.group()}', '', '', None, b[0], page_no, 'parallel-index-amount', 'wysoka', norm_space(raw)))
+            out.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {i2.group()}', '', '', None, b[0], page_no, 'parallel-index-amount', 'wysoka', norm_space(raw)))
     idx = []
     for r in out:
-        m = re.search('(\\d+)$', r.nazwa)
+        m = re.search('(\\d+)$', r.source_name)
         idx.append(int(m.group(1)) if m else -1)
     return out if len(out) >= 10 and len(set(idx)) == len(idx) else []
 
-def parse_vertical_idx_code_gross_net(case_pk, institution_pk, placowka, page_no, page):
+def parse_vertical_idx_code_gross_net(case_pk, institution_pk, institution_name, page_no, page):
     """Parse vertical idx code gross net layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     out = []
@@ -221,7 +221,7 @@ def parse_vertical_idx_code_gross_net(case_pk, institution_pk, placowka, page_no
             a = money_values(lines[i + 1])
             b = money_values(lines[i + 2])
             if len(a) == 1 and len(b) == 1 and (a[0] > 0):
-                out.append(SalaryRow(case_pk, institution_pk, placowka, m.group(2), '', '', b[0], a[0], page_no, 'vertical-idx-code-gross-net', 'wysoka', ' | '.join(lines[i:i + 3])))
+                out.append(SalaryRow(case_pk, institution_pk, institution_name, m.group(2), '', '', b[0], a[0], page_no, 'vertical-idx-code-gross-net', 'wysoka', ' | '.join(lines[i:i + 3])))
                 i += 3
                 continue
         i += 1

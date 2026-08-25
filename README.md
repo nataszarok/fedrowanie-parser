@@ -8,16 +8,16 @@ Repozytorium zawiera aktualną wersję parsera **v35**, rozbitą na główny par
 
 Po parsowaniu dane są normalizowane do jednej tabeli. Przykładowe, zanonimizowane wiersze mogą wyglądać tak:
 
-| placówka | imię i nazwisko | inicjały | specjalizacja | stanowisko/status | jednostka/oddział | typ umowy | wynagrodzenie brutto |
+| institution_name | doctor_name | doctor_initials | specialization | doctor_status | organizational_unit | contract_type | gross_compensation |
 |---|---|---|---|---|---|---|---:|
 | Szpital A | Jan Kowalski |  | radiologia i diagnostyka obrazowa | lekarz specjalista | Zakład Diagnostyki Obrazowej | kontrakt | 1 245 300,00 zł |
 | Szpital B |  | A.B. | choroby wewnętrzne | starszy asystent | Oddział Chorób Wewnętrznych | umowa o pracę | 684 250,40 zł |
 | Szpital C | Anna Nowak |  |  | lekarz w trakcie specjalizacji | SOR | umowa zlecenia | 312 800,00 zł |
 | Szpital D |  | K.M. | anestezjologia i intensywna terapia | lekarz specjalista | OAiIT |  | 958 410,75 zł |
 
-To tylko przykład struktury wyniku — wartości i dane osobowe w tabeli powyżej są przykładowe. W rzeczywistych danych część pól może być pusta, jeżeli placówka nie podała danej informacji albo nie da się jej wiarygodnie wywnioskować z dokumentu.
+To tylko przykład struktury wyniku — wartości i dane osobowe w tabeli powyżej są przykładowe. W rzeczywistych danych część pól może być pusta, jeżeli institution_name nie podała danej informacji albo nie da się jej wiarygodnie wywnioskować z dokumentu.
 
-Oprócz pól pokazanych wyżej wynik zawiera także identyfikatory sprawy i placówki, kwotę netto, numer strony, nazwę użytego parsera, poziom pewności, surowy wiersz źródłowy i komentarz techniczny.
+Oprócz pól pokazanych wyżej wynik zawiera także identyfikatory sprawy i placówki, kwotę netto, numer strony, nazwę użytego parsera, poziom pewności, surowy wiersz źródłowy i comment techniczny.
 
 ## Szybki start — jak wygenerować bazę
 
@@ -80,7 +80,7 @@ Parser działa warstwowo. Najważniejszą zasadą jest to, że **nie traktuje ca
 
    Parsery są grupowane według **struktury danych**, a nie według konkretnej placówki. Reguła specyficzna dla jednego szpitala powinna być ostatecznością.
 
-4. **Normalizacja do wspólnego modelu.** Niezależnie od formatu wejściowego każdy zaakceptowany rekord jest sprowadzany do `SalaryRow`, czyli wspólnego modelu zawierającego m.in. kwotę, typ umowy, specjalizację, jednostkę/oddział, imię i nazwisko, inicjały oraz stanowisko/status.
+4. **Normalizacja do wspólnego modelu.** Niezależnie od formatu wejściowego każdy zaakceptowany rekord jest sprowadzany do `SalaryRow`, czyli wspólnego modelu zawierającego m.in. kwotę, contract_type, specjalizację, jednostkę/oddział, doctor_name, doctor_initials oraz doctor_status.
 
 5. **Enrichment z kontekstu.** Część informacji nie znajduje się bezpośrednio w wierszu z kwotą. Osobne moduły potrafią odzyskać dane z kontekstu dokumentu, np. z nagłówka sekcji, nazwy oddziału, nagłówka kolumny, nazwy załącznika lub struktury tabeli. Dotyczy to m.in. typu umowy, specjalizacji, jednostki organizacyjnej, nazwiska/inicjałów i statusu lekarza.
 
@@ -122,6 +122,10 @@ rekordy szczegółowe + agregacja placówek
 ```
 
 Szczegóły podziału odpowiedzialności między modułami znajdują się w `ARCHITECTURE.md`.
+
+## Model domenowy
+
+`SalaryRow` używa tych samych angielskich nazw `snake_case` co tabela `salaries_extracted`, m.in. `institution_name`, `source_name`, `doctor_name`, `doctor_initials`, `specialization`, `doctor_status`, `organizational_unit`, `contract_type`, `net_compensation`, `gross_compensation`, `page_number`, `confidence` i `comment`.
 
 ## Struktura
 

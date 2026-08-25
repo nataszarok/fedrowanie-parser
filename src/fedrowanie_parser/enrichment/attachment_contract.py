@@ -128,7 +128,7 @@ def fill_missing_contracts_for_case(case_text: str, rows: list[dict]) -> list[di
     zones=contract_zones(case_text)
     out=[]
     for row in rows:
-        current=row.get("typ umowy")
+        current=row.get("contract_type")
         if current is None or (isinstance(current,float) and current!=current):
             current=""
         current=str(current).strip()
@@ -138,21 +138,21 @@ def fill_missing_contracts_for_case(case_text: str, rows: list[dict]) -> list[di
 
         match=match_row_to_zone(
             raw_row=row.get("raw_row"),
-            name=row.get("Nazwa"),
-            gross=row.get("wynagrodzenie brutto"),
-            net=row.get("wynagrodzenie netto"),
+            name=row.get("source_name"),
+            gross=row.get("gross_compensation"),
+            net=row.get("net_compensation"),
             zones=zones,
         )
         if match:
-            r["typ umowy"]=match["contract_type"]
-            comment=r.get("komentarz")
+            r["contract_type"]=match["contract_type"]
+            comment=r.get("comment")
             if comment is None or (isinstance(comment,float) and comment!=comment):
                 comment=""
             extra=(
                 f"typ umowy z kontekstu załącznika: {match['filename']} "
                 f"({match['source']}; {match['evidence']}; match={match['match_reasons']})"
             )
-            r["komentarz"]=(str(comment).strip()+"; "+extra).strip("; ")
+            r["comment"]=(str(comment).strip()+"; "+extra).strip("; ")
         out.append(r)
     return out
 

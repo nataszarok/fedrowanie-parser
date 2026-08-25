@@ -87,7 +87,7 @@ def page_is_2025_relevant(page: str, doc: str) -> bool:
 
 def suspicious_amount(row: SalaryRow) -> bool:
     """Parse or process the `suspicious_amount` layout/stage."""
-    val = row.brutto if row.brutto is not None else row.netto
+    val = row.gross_compensation if row.gross_compensation is not None else row.net_compensation
     if val is None or val <= 0:
         return True
     if 1900 <= val <= 2100 and re.search('\\b20\\d{2}\\b', row.raw_row):
@@ -99,24 +99,24 @@ def suspicious_amount(row: SalaryRow) -> bool:
 def deduplicate(rows: Iterable[SalaryRow]) -> list[SalaryRow]:
     """Remove duplicate salary rows while preserving the strongest source record."""
     rows = list(rows)
-    markdown_amounts = {(r.case_pk, round(r.brutto if r.brutto is not None else r.netto, 2)) for r in rows if r.parser.startswith('markdown') and (r.brutto is not None or r.netto is not None)}
+    markdown_amounts = {(r.case_pk, round(r.gross_compensation if r.gross_compensation is not None else r.net_compensation, 2)) for r in rows if r.parser.startswith('markdown') and (r.gross_compensation is not None or r.net_compensation is not None)}
     seen = set()
     seen_numbered = set()
     out = []
     for r in rows:
-        val = r.brutto if r.brutto is not None else r.netto
+        val = r.gross_compensation if r.gross_compensation is not None else r.net_compensation
         if val is None or val <= 0:
             continue
         raw = norm_space(r.raw_row).lower()
         if r.parser == 'plain-split' and ('| --- |' in raw or '|---|' in raw) and ((r.case_pk, round(val, 2)) in markdown_amounts):
             continue
-        exact = (r.case_pk, r.strona, norm_space(r.nazwa).lower(), norm_space(r.specjalizacja).lower(), norm_space(r.typ_umowy).lower(), r.netto, r.brutto, raw)
+        exact = (r.case_pk, r.page_number, norm_space(r.source_name).lower(), norm_space(r.specialization).lower(), norm_space(r.contract_type).lower(), r.net_compensation, r.gross_compensation, raw)
         if exact in seen:
             continue
         seen.add(exact)
         m = re.match('^\\|?\\s*\\*{0,2}(\\d{1,4})\\*{0,2}[.)]?\\s*\\|', raw)
         if m:
-            numbered = (r.case_pk, int(m.group(1)), round(val, 2), norm_space(r.typ_umowy).lower())
+            numbered = (r.case_pk, int(m.group(1)), round(val, 2), norm_space(r.contract_type).lower())
             if numbered in seen_numbered:
                 continue
             seen_numbered.add(numbered)
@@ -230,7 +230,7 @@ def correspondence_status(doc: str, rows: list[SalaryRow]) -> tuple[str, str]:
     monthly_group_stats = any((('miesiąc' in line.lower() or 'miesiac' in line.lower()) and sum((k in line.lower() for k in ['najwyższe miesięczne', 'najwyzsze miesieczne', 'średnie miesięczne', 'srednie miesieczne', 'najniższe miesięczne', 'najnizsze miesieczne', 'mediana'])) >= 3 for line in doc.splitlines() if line.strip().startswith('|')))
     group_minmax = bool(re.search('(?is)\\|\\s*Oddziały\\s*\\|.*?Minimalny\\s+przychód\\s+za\\s+2025.*?Maksymalny\\s+przychód\\s+za\\s+2025', doc) and re.search('(?i)uniemożliwia\\s+porównanie.*poszczególnych\\s+lekarzy|uniemozliwia\\s+porownanie.*poszczegolnych\\s+lekarzy', doc))
     wrong_period = bool(re.search(f'(?is)Dane\\s+za\\s*\\|?\\s*{MONTH_NAME_RE}\\s+(?:2024|2026|2027)\\s*r?\\.?', doc) and re.search('(?i)wynagrodzenie\\s+(?:brutto|netto)\\s+za\\s+1\\s+miesiąc|średnia\\s+wszystkich\\s+lekarzy|mediana\\s+wszystkich\\s+lekarzy', doc))
-    annual_rows = [r for r in rows if (r.brutto is not None or r.netto is not None) and ((r.brutto or 0) > 0 or (r.netto or 0) > 0)]
+    annual_rows = [r for r in rows if (r.gross_compensation is not None or r.net_compensation is not None) and ((r.gross_compensation or 0) > 0 or (r.net_compensation or 0) > 0)]
     if invoices:
         return ('SUBSTANTIVE_NONCOMPARABLE_DATA', 'accounting_invoice_register')
     if tariffs:
@@ -242,7 +242,7 @@ def correspondence_status(doc: str, rows: list[SalaryRow]) -> tuple[str, str]:
     if wrong_period:
         return ('SUBSTANTIVE_NONCOMPARABLE_DATA', 'wrong_period_monthly_statistics')
     if distribution:
-        genuine_rows = [r for r in annual_rows if not re.search('(?i)liczba\\s+lekarzy|przedzia[łl]|^\\s*\\d+(?:\\s*\\|\\s*\\d+){1,3}\\s*$', norm_space(r.raw_row)) and (re.search('(?i)kod\\s+anonimowy|lekarz\\s+\\d+|praktyka\\s+lekarska', r.raw_row) or (r.nazwa and (not re.fullmatch('(?i)lekarz\\s*\\d*', norm_space(r.nazwa)))))]
+        genuine_rows = [r for r in annual_rows if not re.search('(?i)liczba\\s+lekarzy|przedzia[łl]|^\\s*\\d+(?:\\s*\\|\\s*\\d+){1,3}\\s*$', norm_space(r.raw_row)) and (re.search('(?i)kod\\s+anonimowy|lekarz\\s+\\d+|praktyka\\s+lekarska', r.raw_row) or (r.source_name and (not re.fullmatch('(?i)lekarz\\s*\\d*', norm_space(r.source_name)))))]
         if not genuine_rows:
             return ('SUBSTANTIVE_DISTRIBUTION_ONLY', 'salary_distribution_bins')
     if monthly_group_stats:
@@ -305,8 +305,8 @@ def filter_registry_capital_false_rows(rows, doc: str):
     for r in rows:
         if r.parser != 'plain-index-amount':
             out.append(r); continue
-        m=re.fullmatch(r'(?i)Lekarz\s+(\d{1,4})', norm_space(r.nazwa))
-        val=r.brutto if r.brutto is not None else r.netto
+        m=re.fullmatch(r'(?i)Lekarz\s+(\d{1,4})', norm_space(r.source_name))
+        val=r.gross_compensation if r.gross_compensation is not None else r.net_compensation
         if not m or val is None:
             out.append(r); continue
         idx=m.group(1)

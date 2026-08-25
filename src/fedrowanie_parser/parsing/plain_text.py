@@ -26,7 +26,7 @@ __all__ = [
 
 
 
-def parse_plain_lines(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str) -> list[SalaryRow]:
+def parse_plain_lines(case_pk: int, institution_pk: Optional[int], institution_name: str, page_no: int, page: str) -> list[SalaryRow]:
     """Parse salary records from unstructured plain-text lines."""
     out: list[SalaryRow] = []
     lines = [norm_space(x) for x in page.splitlines()]
@@ -60,7 +60,7 @@ def parse_plain_lines(case_pk: int, institution_pk: Optional[int], placowka: str
             spec = label if SPECIALIZATION_WORDS.search(label) else ''
             name = label if re.search('(?i)^lekarz\\s*(?:nr|n)?\\s*\\d+|inicja', label) else f'Lekarz {idx}'
             kind = amount_kind('\n'.join(lines[max(0, n - 8):n + 1])) if page_kind == 'brutto' else page_kind
-            out.append(SalaryRow(case_pk, institution_pk, placowka, name, spec, contract, val if kind == 'netto' else None, val if kind == 'brutto' else None, page_no, 'plain-inline', 'średnia', line))
+            out.append(SalaryRow(case_pk, institution_pk, institution_name, name, spec, contract, val if kind == 'netto' else None, val if kind == 'brutto' else None, page_no, 'plain-inline', 'średnia', line))
             consumed.add(n)
             continue
         m = idx_amount.match(line)
@@ -73,7 +73,7 @@ def parse_plain_lines(case_pk: int, institution_pk: Optional[int], placowka: str
                 continue
             contract = page_context_contract(lines, n, page_contract)
             kind = page_kind
-            out.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {idx}', '', contract, val if kind == 'netto' else None, val if kind == 'brutto' else None, page_no, 'plain-index-amount', 'średnia', line))
+            out.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {idx}', '', contract, val if kind == 'netto' else None, val if kind == 'brutto' else None, page_no, 'plain-index-amount', 'średnia', line))
             consumed.add(n)
     for n in range(len(lines) - 2):
         if n in consumed:
@@ -102,10 +102,10 @@ def parse_plain_lines(case_pk: int, institution_pk: Optional[int], placowka: str
         spec = middle if SPECIALIZATION_WORDS.search(middle) else ''
         contract = detect_contract(middle, page_context_contract(lines, n, page_contract))
         kind = amount_kind('\n'.join(lines[max(0, n - 12):amount_pos + 1]))
-        out.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {idx}', spec, contract, val if kind == 'netto' else None, val if kind == 'brutto' else None, page_no, 'plain-vertical', 'średnia', ' | '.join(lines[n:amount_pos + 1])))
+        out.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {idx}', spec, contract, val if kind == 'netto' else None, val if kind == 'brutto' else None, page_no, 'plain-vertical', 'średnia', ' | '.join(lines[n:amount_pos + 1])))
     return out
 
-def parse_section_state_rows(case_pk: int, institution_pk: Optional[int], placowka: str, doc: str) -> list[SalaryRow]:
+def parse_section_state_rows(case_pk: int, institution_pk: Optional[int], institution_name: str, doc: str) -> list[SalaryRow]:
     """Parse rows that inherit semantic context from section headings."""
     out: list[SalaryRow] = []
     current_contract = ''
@@ -143,7 +143,7 @@ def parse_section_state_rows(case_pk: int, institution_pk: Optional[int], placow
             vals = money_cells(cells[1])
             if m and len(vals) == 1:
                 val = vals[0][1]
-                out.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {int(m.group(1))}', '', current_contract, None, val, current_page, 'markdown-section-state', 'wysoka', line))
+                out.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {int(m.group(1))}', '', current_contract, None, val, current_page, 'markdown-section-state', 'wysoka', line))
                 continue
         if len(cells) == 3:
             c0, c1, c2 = cells
@@ -153,7 +153,7 @@ def parse_section_state_rows(case_pk: int, institution_pk: Optional[int], placow
             if len(vals) == 1 and text_identity and (not headerish):
                 val = vals[0][1]
                 name = norm_space(f'{c0} {c1}')
-                out.append(SalaryRow(case_pk, institution_pk, placowka, name, '', current_contract, None, val, current_page, 'markdown-section-state', 'wysoka', line))
+                out.append(SalaryRow(case_pk, institution_pk, institution_name, name, '', current_contract, None, val, current_page, 'markdown-section-state', 'wysoka', line))
     return out
 
 def _looks_like_document_metadata_window(lines: list[str]) -> bool:

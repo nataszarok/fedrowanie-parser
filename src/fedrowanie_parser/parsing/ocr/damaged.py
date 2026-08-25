@@ -22,7 +22,7 @@ __all__ = [
 
 
 
-def parse_ocr_contract_amount_list(case_pk: int, institution_pk: Optional[int], placowka: str, page_no: int, page: str) -> list[SalaryRow]:
+def parse_ocr_contract_amount_list(case_pk: int, institution_pk: Optional[int], institution_name: str, page_no: int, page: str) -> list[SalaryRow]:
     """Parse ocr contract amount list layouts into salary-row candidates."""
     rows = []
     seen_raw = set()
@@ -44,22 +44,22 @@ def parse_ocr_contract_amount_list(case_pk: int, institution_pk: Optional[int], 
         if val is None or val <= 0:
             continue
         contract = 'działalność gospodarcza' if is_business else 'umowa cywilnoprawna'
-        rows.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {len(rows) + 1}', '', contract, None, val, page_no, 'ocr-contract-amount-list', 'średnia', raw))
+        rows.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {len(rows) + 1}', '', contract, None, val, page_no, 'ocr-contract-amount-list', 'średnia', raw))
     if len(rows) < 10:
         return []
     out = []
     prev = None
     for r in rows:
-        key = (r.typ_umowy, round(r.brutto or 0, 2))
+        key = (r.contract_type, round(r.gross_compensation or 0, 2))
         if key == prev:
             continue
         out.append(r)
         prev = key
     for i, r in enumerate(out, 1):
-        r.nazwa = f'Lekarz {i}'
+        r.source_name = f'Lekarz {i}'
     return out
 
-def parse_ocr_broken_numbered_salary_table(case_pk, institution_pk, placowka, page_no, page):
+def parse_ocr_broken_numbered_salary_table(case_pk, institution_pk, institution_name, page_no, page):
     """Parse ocr broken numbered salary table layouts into salary-row candidates."""
     if not re.search(r'(?i)oznaczenie\s+lekarza', page):
         return []
@@ -117,14 +117,14 @@ def parse_ocr_broken_numbered_salary_table(case_pk, institution_pk, placowka, pa
 
     out=[]
     for idx,(val,raw) in enumerate(prior,1):
-        out.append(SalaryRow(case_pk,institution_pk,placowka,f'Lekarz {idx}','','',
+        out.append(SalaryRow(case_pk,institution_pk,institution_name,f'Lekarz {idx}','','',
                              None,val,page_no,'ocr-broken-numbered-table','średnia',raw,comment))
     for idx,val,_,raw in explicit:
-        out.append(SalaryRow(case_pk,institution_pk,placowka,f'Lekarz {idx}','','',
+        out.append(SalaryRow(case_pk,institution_pk,institution_name,f'Lekarz {idx}','','',
                              None,val,page_no,'ocr-broken-numbered-table','średnia',raw,comment))
     return out
 
-def parse_forma_name_amount_ocr(case_pk, institution_pk, placowka, page_no, page):
+def parse_forma_name_amount_ocr(case_pk, institution_pk, institution_name, page_no, page):
     """Parse forma name amount ocr layouts into salary-row candidates."""
     if not (re.search(r'(?m)^FORMA\s*$',page) or re.search(r'(?m)^FORMA\s+[A-ZĄĆĘŁŃÓŚŹŻ]',page)):
         return []
@@ -146,11 +146,11 @@ def parse_forma_name_amount_ocr(case_pk, institution_pk, placowka, page_no, page
             if not label or not re.search(r'[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]',label): continue
             if is_metadata_context(label) or val<=0 or val>5_000_000: continue
             if re.search(r'(?i)kierownik\s+dzia[łl]u|koniec\s+strony',label): continue
-            out.append(SalaryRow(case_pk,institution_pk,placowka,label,'','',None,val,page_no,
+            out.append(SalaryRow(case_pk,institution_pk,institution_name,label,'','',None,val,page_no,
                                  'forma-name-amount-ocr','średnia',line))
     return out if len(out)>=5 else []
 
-def parse_lekarz_inline_anon_list(case_pk, institution_pk, placowka, page_no, page):
+def parse_lekarz_inline_anon_list(case_pk, institution_pk, institution_name, page_no, page):
     """Parse lekarz inline anon list layouts into salary-row candidates."""
     lines = [norm_space(x) for x in page.splitlines() if norm_space(x)]
     rows = []
@@ -172,9 +172,9 @@ def parse_lekarz_inline_anon_list(case_pk, institution_pk, placowka, page_no, pa
         return []
     ids = {x[0] for x in numbered}
     if first_unnum and 2 in ids and (1 not in ids):
-        rows.append(SalaryRow(case_pk, institution_pk, placowka, 'Lekarz 1', '', '', None, first_unnum[0], page_no, 'anon-lekarz-inline-list', 'wysoka', first_unnum[1]))
+        rows.append(SalaryRow(case_pk, institution_pk, institution_name, 'Lekarz 1', '', '', None, first_unnum[0], page_no, 'anon-lekarz-inline-list', 'wysoka', first_unnum[1]))
     for idx, val, raw in numbered:
-        rows.append(SalaryRow(case_pk, institution_pk, placowka, f'Lekarz {idx}', '', '', None, val, page_no, 'anon-lekarz-inline-list', 'wysoka', raw))
+        rows.append(SalaryRow(case_pk, institution_pk, institution_name, f'Lekarz {idx}', '', '', None, val, page_no, 'anon-lekarz-inline-list', 'wysoka', raw))
     return rows
 
 

@@ -69,7 +69,7 @@ def extract_cases(cases: list[SourceCase]) -> ExtractionResult:
         comment = topn_comment(doc)
         if comment:
             for row in rows:
-                row.komentarz = comment
+                row.comment = comment
 
         status, reason = correspondence_status(doc, rows)
         if status.startswith("INDIVIDUAL_ANNUAL_2025"):
@@ -89,7 +89,7 @@ def extract_cases(cases: list[SourceCase]) -> ExtractionResult:
     return ExtractionResult(rows=accepted, statuses=statuses)
 
 
-def _page_rows(case_pk, institution_pk, placowka, page_no, page, doc, inherited_contract, inherited_kind, inherited_spec):
+def _page_rows(case_pk, institution_pk, institution_name, page_no, page, doc, inherited_contract, inherited_kind, inherited_spec):
     """Run the parser families applicable to one document page."""
     vals = money_values(page)
     if (vals and max(vals) < 1000
@@ -97,7 +97,7 @@ def _page_rows(case_pk, institution_pk, placowka, page_no, page, doc, inherited_
         return []
     if page_is_group_aggregate_salary_table(page):
         return []
-    args = (case_pk, institution_pk, placowka, page_no, page)
+    args = (case_pk, institution_pk, institution_name, page_no, page)
     broken_ocr = parse_ocr_broken_numbered_salary_table(*args)
     if broken_ocr:
         return broken_ocr
@@ -133,7 +133,7 @@ def _page_rows(case_pk, institution_pk, placowka, page_no, page, doc, inherited_
     named_colon_annual = parse_annual_named_colon_amount_list(*args)
     plain = parse_plain_lines(*args)
     existing_vertical = [r for r in plain if r.parser == 'plain-vertical']
-    vertical_named = [r for r in vertical_named if not re.fullmatch('[\\d\\s.,]+\\s*zł', r.nazwa or '', re.I)]
+    vertical_named = [r for r in vertical_named if not re.fullmatch('[\\d\\s.,]+\\s*zł', r.source_name or '', re.I)]
     if existing_vertical:
         vertical_pairs = []
         plain = [r for r in plain if r.parser != 'plain-index-amount']
@@ -164,7 +164,7 @@ def _technical_filter(rows):
             continue
         if re.search('(?i)<\\s*500[ .]?000|>\\s*500[ .]?000|>\\s*1[ .]?000[ .]?000', r.raw_row):
             continue
-        if r.parser == 'markdown-table' and (r.brutto or r.netto or 0) < 1000 and re.search('(?i)okres:|od 01 do 12', r.raw_row):
+        if r.parser == 'markdown-table' and (r.gross_compensation or r.net_compensation or 0) < 1000 and re.search('(?i)okres:|od 01 do 12', r.raw_row):
             continue
         out.append(r)
     return out
@@ -175,13 +175,13 @@ def _rank_dedup(rows):
     for r in rows:
         raw = norm_space(r.raw_row).lower()
         indexed = bool(re.match('^\\|?\\s*\\d{1,4}\\s*[.):]?\\s*\\|', raw))
-        key = (r.case_pk, None if indexed else r.strona, raw, r.netto, r.brutto)
+        key = (r.case_pk, None if indexed else r.page_number, raw, r.net_compensation, r.gross_compensation)
         old = raw_best.get(key)
         if (
             old is None
-            or ((r.typ_umowy or '').strip() and not (old.typ_umowy or '').strip())
+            or ((r.contract_type or '').strip() and not (old.contract_type or '').strip())
             or (
-                bool((r.typ_umowy or '').strip()) == bool((old.typ_umowy or '').strip())
+                bool((r.contract_type or '').strip()) == bool((old.contract_type or '').strip())
                 and PARSER_RANK.get(r.parser, 0) > PARSER_RANK.get(old.parser, 0)
             )
         ):
@@ -190,23 +190,23 @@ def _rank_dedup(rows):
     for r in raw_best.values():
         raw = norm_space(r.raw_row).lower()
         if re.match('^\\|?\\s*\\d{1,4}\\s*[.):]?\\s*\\|', raw):
-            key = (r.case_pk, r.strona, raw, r.netto, r.brutto)
+            key = (r.case_pk, r.page_number, raw, r.net_compensation, r.gross_compensation)
         else:
-            key = (r.case_pk, r.strona, norm_space(r.nazwa).lower(), norm_space(r.specjalizacja).lower(), norm_space(r.typ_umowy).lower(), r.netto, r.brutto)
+            key = (r.case_pk, r.page_number, norm_space(r.source_name).lower(), norm_space(r.specialization).lower(), norm_space(r.contract_type).lower(), r.net_compensation, r.gross_compensation)
         old = best.get(key)
         if old is None or PARSER_RANK.get(r.parser, 0) > PARSER_RANK.get(old.parser, 0):
             best[key] = r
     return list(best.values())
 
-def _case_rows(case_pk, institution_pk, placowka, doc):
+def _case_rows(case_pk, institution_pk, institution_name, doc):
     """Extract, reconcile and enrich salary rows for a single case."""
     if aggregate_count_total_guard(doc):
         return []
-    parallel = parse_parallel_name_amount_lists(case_pk, institution_pk, placowka, doc)
+    parallel = parse_parallel_name_amount_lists(case_pk, institution_pk, institution_name, doc)
     if parallel:
         return filter_registry_capital_false_rows(_rank_dedup(_technical_filter(parallel)), doc)
 
-    rows = parse_section_state_rows(case_pk, institution_pk, placowka, doc)
+    rows = parse_section_state_rows(case_pk, institution_pk, institution_name, doc)
     contract, kind, spec = ('', 'brutto', '')
     for page_no, page in split_pages(doc):
         if not page_is_2025_relevant(page, doc):
@@ -217,7 +217,7 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
             kind='netto'
         elif GROSS_RE.search(head):
             kind='brutto'
-        rows.extend(_page_rows(case_pk,institution_pk,placowka,page_no,page,doc,contract,kind,spec))
+        rows.extend(_page_rows(case_pk,institution_pk,institution_name,page_no,page,doc,contract,kind,spec))
 
     base=_rank_dedup(_technical_filter(rows))
 
@@ -240,7 +240,7 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
             base=[r for r in base if r.parser!='plain-index-amount']
             for a in annual:
                 ledger_rows.append(SalaryRow(
-                    case_pk,institution_pk,placowka,a.display_name,'','',
+                    case_pk,institution_pk,institution_name,a.display_name,'','',
                     None,a.annual_total,0,'monthly-ledger-annualizer','wysoka',
                     f'{a.display_name} | suma 2025: {a.annual_total:.2f}',
                     f'suma z {a.tx_count} miesięcznych wpisów; miesiące={a.months_count}; '
@@ -252,14 +252,14 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
     # are split across pages. It is used only when it is demonstrably more complete
     # than page parsing (or page parsing returned nothing).
     candidates=[
-        parse_body_lekarz_number_amount(case_pk,institution_pk,placowka,0,doc),
-        parse_specialty_amount_lines(case_pk,institution_pk,placowka,0,doc),
-        parse_explicit_annual_prose_salary(case_pk,institution_pk,placowka,0,doc),
+        parse_body_lekarz_number_amount(case_pk,institution_pk,institution_name,0,doc),
+        parse_specialty_amount_lines(case_pk,institution_pk,institution_name,0,doc),
+        parse_explicit_annual_prose_salary(case_pk,institution_pk,institution_name,0,doc),
     ]
     candidates=[_rank_dedup(_technical_filter(g)) for g in candidates if g]
 
     def amounts(rs):
-        return [round((r.brutto if r.brutto is not None else r.netto or 0),2) for r in rs]
+        return [round((r.gross_compensation if r.gross_compensation is not None else r.net_compensation or 0),2) for r in rs]
     def multiset_subset(a,b):
         from collections import Counter
         ca,cb=Counter(a),Counter(b)
@@ -308,7 +308,7 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
                     continue
                 inf=infer_contract_from_multi_columns(hs,raw_cells)
                 if inf and len(inf['active_types'])==1:
-                    r.typ_umowy=inf['contract_type']
+                    r.contract_type=inf['contract_type']
                     break
 
     # Reconcile separate contract columns across page/OCR continuations.
@@ -332,33 +332,33 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
                 total_match=None
                 if len(expected)>1:
                     for er in existing:
-                        ev=er.brutto if er.brutto is not None else er.netto
+                        ev=er.gross_compensation if er.gross_compensation is not None else er.net_compensation
                         if ev is not None and abs(float(ev)-exp_sum)<0.02:
                             total_match=er
                             break
                 if total_match is not None:
-                    total_match.typ_umowy=' / '.join(dict.fromkeys(ct for ct,_ in expected))
+                    total_match.contract_type=' / '.join(dict.fromkeys(ct for ct,_ in expected))
                     continue
                 for ct, amount in expected:
                     matched=None
                     for r in existing:
-                        rv=r.brutto if r.brutto is not None else r.netto
+                        rv=r.gross_compensation if r.gross_compensation is not None else r.net_compensation
                         if rv is not None and abs(float(rv)-float(amount))<0.02:
                             matched=r
                             break
                     if matched is not None:
-                        matched.typ_umowy=ct
+                        matched.contract_type=ct
                         continue
                     # The generic parser may have skipped a populated column.
                     # Add only the missing amount from the same source row.
                     if existing:
                         proto=existing[0]
                         additions.append(SalaryRow(
-                            proto.case_pk, proto.institution_pk, proto.placowka,
-                            proto.nazwa, proto.specjalizacja, ct, None, amount,
-                            proto.strona, 'markdown-multi-contract-reconcile',
+                            proto.case_pk, proto.institution_pk, proto.institution_name,
+                            proto.source_name, proto.specialization, ct, None, amount,
+                            proto.page_number, 'markdown-multi-contract-reconcile',
                             'wysoka', proto.raw_row,
-                            (proto.komentarz or '') + '; odzyskano brakującą niepustą kolumnę typu umowy'
+                            (proto.comment or '') + '; odzyskano brakującą niepustą kolumnę typu umowy'
                         ))
             final_rows.extend(additions)
 
@@ -366,13 +366,13 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
     # section/list. Existing row-level values always win.
     if infer_contract_from_record_and_section is not None:
         for r in final_rows:
-            if (r.typ_umowy or '').strip():
+            if (r.contract_type or '').strip():
                 continue
             inf=infer_contract_from_record_and_section(doc,r.raw_row)
             if inf:
-                r.typ_umowy=inf[0]
+                r.contract_type=inf[0]
                 extra=f"typ umowy z semantyki rekordu/sekcji: {inf[1]}"
-                r.komentarz=((r.komentarz or '').strip()+'; '+extra).strip('; ')
+                r.comment=((r.comment or '').strip()+'; '+extra).strip('; ')
 
     # Recover missing contract type from the exact attachment/local section that
     # contains this row. Existing row-level contract values always win.
@@ -380,23 +380,23 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
         zones=contract_zones(doc)
         if zones:
             for r in final_rows:
-                if (r.typ_umowy or '').strip():
+                if (r.contract_type or '').strip():
                     continue
                 m=match_row_to_zone(
                     raw_row=r.raw_row,
-                    name=r.nazwa,
-                    gross=r.brutto,
-                    net=r.netto,
+                    name=r.source_name,
+                    gross=r.gross_compensation,
+                    net=r.net_compensation,
                     zones=zones,
                 )
                 if not m:
                     continue
-                r.typ_umowy=m['contract_type']
+                r.contract_type=m['contract_type']
                 extra=(
                     f"typ umowy z kontekstu załącznika: {m['filename']} "
                     f"({m['source']}; {m['evidence']}; match={m['match_reasons']})"
                 )
-                r.komentarz=((r.komentarz or '').strip()+'; '+extra).strip('; ')
+                r.comment=((r.comment or '').strip()+'; '+extra).strip('; ')
     # Replace a weaker generic extraction with a structured section-list parse
     # when the source is clearly of the form:
     #   Oddział X:
@@ -408,7 +408,7 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
         if sec_items:
             old_amounts=[]
             for r in final_rows:
-                v=r.brutto if r.brutto is not None else r.netto
+                v=r.gross_compensation if r.gross_compensation is not None else r.net_compensation
                 if v is not None:
                     old_amounts.append(round(float(v),2))
             from collections import Counter as _Counter
@@ -421,7 +421,7 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
                 # Reuse metadata from matching old rows where possible.
                 pools={}
                 for r in final_rows:
-                    v=r.brutto if r.brutto is not None else r.netto
+                    v=r.gross_compensation if r.gross_compensation is not None else r.net_compensation
                     if v is None:
                         continue
                     pools.setdefault(round(float(v),2),[]).append(r)
@@ -434,17 +434,17 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
                     rebuilt.append(SalaryRow(
                         case_pk,
                         institution_pk,
-                        placowka,
+                        institution_name,
                         f'Lekarz {x.index}',
                         '',
-                        old.typ_umowy if old is not None else '',
+                        old.contract_type if old is not None else '',
                         None,
                         x.amount,
-                        old.strona if old is not None else 0,
+                        old.page_number if old is not None else 0,
                         'section-salary-list',
                         'wysoka',
                         x.raw_row,
-                        ((old.komentarz if old is not None else '') +
+                        ((old.comment if old is not None else '') +
                          '; rekord z sekcyjnej listy wynagrodzeń').strip('; '),
                         x.unit,
                     ))
@@ -455,10 +455,10 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
     # are split; explicit unit cells and governing section headings are recovered.
     if infer_unit_and_specialization is not None:
         for r in final_rows:
-            unit, spec = infer_unit_and_specialization(doc, r.raw_row, r.specjalizacja)
+            unit, spec = infer_unit_and_specialization(doc, r.raw_row, r.specialization)
             if unit:
-                r.jednostka_oddzial = unit
-            r.specjalizacja = spec
+                r.organizational_unit = unit
+            r.specialization = spec
 
     # Stronger organizational-unit recovery based on explicit table-column
     # semantics and stateful plain-text section headings. These rules may
@@ -482,82 +482,82 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
             idx_exact=None
             m_idx=re.match(r'^\s*(\d+)\b', str(r.raw_row or ''))
             if not m_idx:
-                m_idx=re.fullmatch(r'(?i)Lekarz\s+(\d+)', norm_space(r.nazwa))
-            rv=r.brutto if r.brutto is not None else r.netto
+                m_idx=re.fullmatch(r'(?i)Lekarz\s+(\d+)', norm_space(r.source_name))
+            rv=r.gross_compensation if r.gross_compensation is not None else r.net_compensation
             if m_idx and rv is not None:
                 idx_exact=idxmap.get((int(m_idx.group(1)), int(round(float(rv)*100))))
 
             if idx_exact:
-                r.jednostka_oddzial=idx_exact
+                r.organizational_unit=idx_exact
             elif exact:
-                r.jednostka_oddzial=exact
+                r.organizational_unit=exact
             else:
                 sr=norm_space(r.raw_row)
                 sec=secmap_norm.get(sr)
                 if sec:
-                    r.jednostka_oddzial=sec
+                    r.organizational_unit=sec
                 elif inline_ocr_section_unit is not None:
                     inline=inline_ocr_section_unit(r.raw_row)
                     if inline:
-                        r.jednostka_oddzial=inline
+                        r.organizational_unit=inline
 
             if (
-                not (r.jednostka_oddzial or '').strip()
+                not (r.organizational_unit or '').strip()
                 and shifted_row_unit_candidate is not None
             ):
                 shifted=shifted_row_unit_candidate(r.raw_row)
                 if shifted:
-                    r.jednostka_oddzial=shifted
+                    r.organizational_unit=shifted
 
             # A former generic table parser sometimes copied the unit-column
-            # value into `specjalizacja`. Once structural unit provenance is
+            # value into `specialization`. Once structural unit provenance is
             # known, remove only an exact duplicate; never infer/erase a
             # genuinely different medical specialization.
             if (
-                (r.jednostka_oddzial or '').strip()
-                and (r.specjalizacja or '').strip()
-                and norm_space(r.jednostka_oddzial).casefold()
-                    == norm_space(r.specjalizacja).casefold()
+                (r.organizational_unit or '').strip()
+                and (r.specialization or '').strip()
+                and norm_space(r.organizational_unit).casefold()
+                    == norm_space(r.specialization).casefold()
             ):
-                r.specjalizacja=''
+                r.specialization=''
 
     # Recover missing medical specialization from the record itself.
     if infer_specialization_from_raw_row is not None:
         for r in final_rows:
             inf=infer_specialization_from_raw_row(
-                r.raw_row, r.specjalizacja, r.jednostka_oddzial
+                r.raw_row, r.specialization, r.organizational_unit
             )
             if inf:
-                r.specjalizacja=inf[0]
+                r.specialization=inf[0]
                 extra=inf[1]
-                r.komentarz=((r.komentarz or '').strip()+'; '+extra).strip('; ')
+                r.comment=((r.comment or '').strip()+'; '+extra).strip('; ')
 
     # Dedicated physician-name field. Prefer explicit table semantics, then
     # conservative structured-row inference. Move exact historical false
-    # positives out of `specjalizacja`.
+    # positives out of `specialization`.
     if document_person_name_maps is not None or infer_person_name is not None:
         raw_name_map, idx_name_map = document_person_name_maps(doc) if document_person_name_maps is not None else ({}, {})
         for r in final_rows:
             key=' | '.join(norm_space(x) for x in str(r.raw_row or '').strip().strip('|').split('|'))
             person=raw_name_map.get(key,'')
-            rv=r.brutto if r.brutto is not None else r.netto
+            rv=r.gross_compensation if r.gross_compensation is not None else r.net_compensation
             m_idx=re.match(r'^\s*(\d+)\b', str(r.raw_row or ''))
             if not person and m_idx and rv is not None:
                 person=idx_name_map.get((int(m_idx.group(1)), int(round(float(rv)*100))), '')
             if not person and infer_person_name is not None:
-                person=infer_person_name(r.raw_row, r.specjalizacja, r.jednostka_oddzial)
+                person=infer_person_name(r.raw_row, r.specialization, r.organizational_unit)
             if person:
-                r.imie_nazwisko=person
-                if (r.specjalizacja or '').strip() and norm_space(r.specjalizacja).casefold()==norm_space(person).casefold():
-                    r.specjalizacja=''
+                r.doctor_name=person
+                if (r.specialization or '').strip() and norm_space(r.specialization).casefold()==norm_space(person).casefold():
+                    r.specialization=''
 
     if extract_status is not None:
         for r in final_rows:
-            status, clear_spec = extract_status(r.nazwa, r.raw_row, r.specjalizacja)
+            status, clear_spec = extract_status(r.source_name, r.raw_row, r.specialization)
             if status:
-                r.stanowisko_status = status
+                r.doctor_status = status
             if clear_spec:
-                r.specjalizacja = ''
+                r.specialization = ''
 
     # Recover anonymised initials / physician identifiers into a dedicated
     # field, separate from full person names.
@@ -569,7 +569,7 @@ def _case_rows(case_pk, institution_pk, placowka, doc):
             if not ini and infer_initials_from_row is not None:
                 ini=infer_initials_from_row(r.raw_row)
             if ini:
-                r.inicjaly=ini
+                r.doctor_initials=ini
 
     return validate_case_rows(final_rows)
 
