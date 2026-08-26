@@ -13,21 +13,43 @@ __all__ = [
 
 def load_source_cases(con: sqlite3.Connection) -> list[SourceCase]:
     """Load source cases with institution metadata and concatenated page text."""
+
     con.row_factory = sqlite3.Row
+
     query = """
         SELECT
-            cp.case_pk,
-            cp.text,
+            c.pk AS case_pk,
+            TRIM(
+                COALESCE(cp.text, '') ||
+                CASE
+                    WHEN cp.text IS NOT NULL
+                         AND at.attachment_text IS NOT NULL
+                    THEN CHAR(10)
+                    ELSE ''
+                END ||
+                COALESCE(at.attachment_text, '')
+            ) AS text,
             c.institution_pk,
             COALESCE(i.name, c.name, '') AS institution_name
-        FROM case_pages AS cp
-        LEFT JOIN cases AS c
-            ON c.pk = cp.case_pk
+        FROM cases AS c
+        LEFT JOIN case_pages AS cp
+            ON cp.case_pk = c.pk
         LEFT JOIN institutions AS i
             ON i.pk = c.institution_pk
-        WHERE cp.text IS NOT NULL
-          AND TRIM(cp.text) <> ''
-        ORDER BY cp.case_pk, cp.rowid
+        LEFT JOIN (
+            SELECT
+                case_pk,
+                GROUP_CONCAT(text, CHAR(10)) AS attachment_text
+            FROM attachment_texts
+            WHERE text IS NOT NULL
+              AND TRIM(text) <> ''
+            GROUP BY case_pk
+        ) AS at
+            ON at.case_pk = c.pk
+        WHERE
+            (cp.text IS NOT NULL AND TRIM(cp.text) <> '')
+            OR at.attachment_text IS NOT NULL
+        ORDER BY c.pk
     """
 
     grouped: dict[int, tuple[int | None, str, list[str]]] = {}

@@ -4,7 +4,6 @@ All extraction logic lives outside this module.
 """
 from __future__ import annotations
 import argparse
-import shutil
 import sqlite3
 from pathlib import Path
 from .pipeline import extract_cases
@@ -34,9 +33,19 @@ def main() -> None:
     args = ap.parse_args()
     src = Path(args.db)
     out_db = Path(args.out_db)
+    
     if src.resolve() != out_db.resolve():
-        shutil.copy2(src, out_db)
+        source_con = sqlite3.connect(src)
+        output_con = sqlite3.connect(out_db)
+
+        with output_con:
+            source_con.backup(output_con)
+
+        source_con.close()
+        output_con.close()
+
     con = sqlite3.connect(out_db)
+    
     source_cases = load_source_cases(con)
     result = extract_cases(source_cases)
     write_cases_status(con, result.statuses)

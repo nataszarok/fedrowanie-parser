@@ -16,6 +16,7 @@ data/*
 output/*
 !output/.gitkeep
 *.db
+*.db-*
 *.sqlite
 *.sqlite3
 *.csv
