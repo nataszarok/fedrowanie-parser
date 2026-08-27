@@ -21,6 +21,7 @@ __all__ = [
     "parse_vertical_role_named_amount",
     "parse_two_section_vertical_salary",
     "parse_numbered_amount_only_series",
+    "parse_vertical_index_amount_series",
     "parse_parallel_name_amount_lists",
     "parse_parallel_doctor_amount_lists",
     "parse_anonymous_amount_only_series",
@@ -190,6 +191,105 @@ def parse_two_section_vertical_salary(case_pk, institution_pk, institution_name,
                 continue
         i += 1
     return out if len(out) >= 5 else []
+
+
+def parse_vertical_index_amount_series(
+    case_pk: int,
+    institution_pk: Optional[int],
+    institution_name: str,
+    page_no: int,
+    page: str,
+) -> list[SalaryRow]:
+    """Parse anonymous vertical index-to-annual-compensation series for 2025."""
+    lines = [norm_space(line) for line in page.splitlines() if norm_space(line)]
+
+    header_index = next(
+        (
+            i
+            for i, line in enumerate(lines)
+            if re.search(
+                r"(?i)"
+                r"(?:łączne|laczne|całkowite|calkowite)?\s*"
+                r"wynagrodzenie(?:\s+lekarzy)?"
+                r".{0,80}\b2025\b",
+                line,
+            )
+        ),
+        None,
+    )
+    if header_index is None:
+        return []
+
+    header_context = " ".join(lines[max(0, header_index - 1):header_index + 3])
+    if not re.search(
+        r"(?i)"
+        r"(?:łączne|laczne|całkowite|calkowite|"
+        r"wypłacone\s+w\s+2025|wyplacone\s+w\s+2025|"
+        r"w\s+roku\s+2025|za\s+rok\s+2025|za\s+2025)",
+        header_context,
+    ):
+        return []
+
+    pairs: list[tuple[int, float, str]] = []
+    i = header_index + 1
+
+    while i < len(lines) and re.fullmatch(r"(?i)l\.?\s*p\.?", lines[i]):
+        i += 1
+
+    while i + 1 < len(lines):
+        index_line = lines[i]
+        amount_line = lines[i + 1]
+
+        if not re.fullmatch(r"\d{1,4}[.)]?", index_line):
+            i += 1
+            continue
+
+        if not re.fullmatch(
+            r"(?:\d{1,3}(?:[ .]\d{3})+|\d{4,7})"
+            r"(?:[,.]\d{2})\s*(?:zł|pln)?",
+            amount_line,
+            re.I,
+        ):
+            i += 1
+            continue
+
+        idx = int(index_line.rstrip(".)"))
+        value = parse_money(amount_line)
+        if value is None or value <= 0:
+            i += 1
+            continue
+
+        pairs.append((idx, value, f"{index_line} | {amount_line}"))
+        i += 2
+
+    if len(pairs) < 3:
+        return []
+
+    indexes = [idx for idx, _, _ in pairs]
+    # The same logical list may switch layout after a page break. Accept any
+    # contiguous segment here; reconciliation with other parsers happens at
+    # case level and preserves earlier/later segments parsed differently.
+    if indexes != list(range(indexes[0], indexes[0] + len(indexes))):
+        return []
+
+    kind_net = bool(re.search(r"(?i)\bnetto\b", header_context))
+    return [
+        SalaryRow(
+            case_pk,
+            institution_pk,
+            institution_name,
+            f"Lekarz {idx}",
+            "",
+            "",
+            value if kind_net else None,
+            None if kind_net else value,
+            page_no,
+            "vertical-index-amount-series",
+            "wysoka",
+            raw,
+        )
+        for idx, value, raw in pairs
+    ]
 
 def parse_numbered_amount_only_series(case_pk, institution_pk, institution_name, page_no, page):
     """Parse numbered amount only series layouts into salary-row candidates."""

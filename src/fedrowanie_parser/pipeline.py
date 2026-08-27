@@ -138,6 +138,7 @@ def _page_rows(case_pk, institution_pk, institution_name, page_no, page, doc, in
     two_section = parse_two_section_vertical_salary(*args)
     annual_prose = parse_explicit_annual_prose_salary(*args)
     amount_series = parse_numbered_amount_only_series(*args)
+    vertical_index_amounts = parse_vertical_index_amount_series(*args)
     body_lekarz = parse_body_lekarz_number_amount(*args)
     body_lp = parse_body_lp_amount(*args)
     parallel_lists = parse_parallel_doctor_amount_lists(*args)
@@ -161,13 +162,13 @@ def _page_rows(case_pk, institution_pk, institution_name, page_no, page, doc, in
         plain = [r for r in plain if r.parser not in ('plain-index-amount', 'plain-inline')]
     if embedded_list:
         named_inline = []
-    strong = named_inline or lekarz_inline or vertical_struct or gross_net_struct or parallel_idx or anon_inline or bracket_rows or embedded_list or amount_series or specialty_lines or role_named or named_table or two_section or annual_prose or body_lekarz or body_lp or parallel_lists or anon_amounts or annual_contract_lines or contract_practice_costs or forma_rows or single_anon_annual or named_colon_annual
+    strong = named_inline or lekarz_inline or vertical_struct or gross_net_struct or parallel_idx or anon_inline or bracket_rows or embedded_list or amount_series or vertical_index_amounts or specialty_lines or role_named or named_table or two_section or annual_prose or body_lekarz or body_lp or parallel_lists or anon_amounts or annual_contract_lines or contract_practice_costs or forma_rows or single_anon_annual or named_colon_annual
     if named_table or two_section or annual_prose:
         plain = [r for r in plain if r.parser not in ('plain-inline', 'plain-index-amount', 'plain-vertical', 'plain-named')]
         vertical_pairs = []
     if strong:
         plain = [r for r in plain if r.parser not in ('plain-inline', 'plain-index-amount', 'plain-vertical')]
-    groups = (md, md_cont, named_inline, lekarz_inline, vertical_struct, gross_net_struct, parallel_idx, anon_inline, indexed_single, total_gross_cont, bracket_rows, embedded_list, amount_series, specialty_lines, role_named, named_table, two_section, annual_prose, body_lekarz, body_lp, parallel_lists, anon_amounts, annual_contract_lines, contract_practice_costs, forma_rows, single_anon_annual, named_colon_annual, vertical_pairs, vertical_named, ocr_contract, plain)
+    groups = (md, md_cont, named_inline, lekarz_inline, vertical_struct, gross_net_struct, parallel_idx, anon_inline, indexed_single, total_gross_cont, bracket_rows, embedded_list, amount_series, vertical_index_amounts, specialty_lines, role_named, named_table, two_section, annual_prose, body_lekarz, body_lp, parallel_lists, anon_amounts, annual_contract_lines, contract_practice_costs, forma_rows, single_anon_annual, named_colon_annual, vertical_pairs, vertical_named, ocr_contract, plain)
     return [row for group in groups for row in group]
 
 def _technical_filter(rows):
@@ -214,6 +215,78 @@ def _rank_dedup(rows):
             best[key] = r
     return list(best.values())
 
+
+def _reconcile_numbered_annual_series(
+    base_rows: list[SalaryRow],
+    segment_rows: list[SalaryRow],
+) -> list[SalaryRow]:
+    """Merge a structured numbered segment with rows parsed from other layouts."""
+    if not segment_rows:
+        return base_rows
+
+    def index_of(row: SalaryRow) -> int | None:
+        match = re.fullmatch(r"(?i)Lekarz\s+(\d{1,4})", norm_space(row.source_name))
+        return int(match.group(1)) if match else None
+
+    segment_by_index = {
+        idx: row
+        for row in segment_rows
+        if (idx := index_of(row)) is not None
+    }
+    if not segment_by_index:
+        return base_rows
+
+    start = min(segment_by_index)
+    end = max(segment_by_index)
+    if set(segment_by_index) != set(range(start, end + 1)):
+        return base_rows
+
+    base_by_index: dict[int, list[SalaryRow]] = {}
+    non_indexed: list[SalaryRow] = []
+    for row in base_rows:
+        idx = index_of(row)
+        if idx is None:
+            non_indexed.append(row)
+        else:
+            base_by_index.setdefault(idx, []).append(row)
+
+    # Reconciliation is activated only when the structured segment plus existing
+    # rows forms a complete logical sequence from 1 through the segment end.
+    available = set(base_by_index) | set(segment_by_index)
+    if not set(range(1, end + 1)).issubset(available):
+        return base_rows
+
+    merged: list[SalaryRow] = list(non_indexed)
+    for idx in range(1, end + 1):
+        if idx in segment_by_index:
+            merged.append(segment_by_index[idx])
+            continue
+
+        # Rows before a layout switch remain owned by the parser that recovered
+        # them. Keep the highest-ranked candidate if more than one exists.
+        candidates = base_by_index.get(idx, [])
+        if candidates:
+            merged.append(
+                max(candidates, key=lambda row: PARSER_RANK.get(row.parser, 0))
+            )
+
+    # Preserve unrelated numbered records after the reconciled sequence, except
+    # obvious year-as-index metadata false positives such as "Lekarz 2025 = 1".
+    for idx, candidates in base_by_index.items():
+        if idx <= end:
+            continue
+        for row in candidates:
+            value = (
+                row.gross_compensation
+                if row.gross_compensation is not None
+                else row.net_compensation
+            )
+            if idx == YEAR and value is not None and value < 1000:
+                continue
+            merged.append(row)
+
+    return _rank_dedup(merged)
+
 def _case_rows(case_pk, institution_pk, institution_name, doc):
     """Extract, reconcile and enrich salary rows for a single case."""
     if aggregate_count_total_guard(doc):
@@ -221,6 +294,13 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
     parallel = parse_parallel_name_amount_lists(case_pk, institution_pk, institution_name, doc)
     if parallel:
         return filter_registry_capital_false_rows(_rank_dedup(_technical_filter(parallel)), doc)
+
+    # A logical numbered annual-salary list may change layout between pages.
+    # Parse the full document only as an additional structured segment; never
+    # let it replace unrelated rows recovered by page/section parsers.
+    vertical_document_rows = parse_vertical_index_amount_series(
+        case_pk, institution_pk, institution_name, 0, doc
+    )
 
     rows = parse_section_state_rows(case_pk, institution_pk, institution_name, doc)
     contract, kind, spec = ('', 'brutto', '')
@@ -236,6 +316,8 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
         rows.extend(_page_rows(case_pk,institution_pk,institution_name,page_no,page,doc,contract,kind,spec))
 
     base=_rank_dedup(_technical_filter(rows))
+    if vertical_document_rows:
+        base=_reconcile_numbered_annual_series(base, vertical_document_rows)
 
     # Importable monthly-ledger annualizer:
     # repeated rows `Data Dokumentu | Podmiot | Wartość` are transactions,

@@ -155,3 +155,17 @@ correspondence into boolean `CaseFlags`, which are persisted as columns in
 `cases_status`. This allows one case to retain multiple events (for example,
 deadline extension followed by a successful data response) without turning
 `status` into a mutually-exclusive workflow state machine.
+
+## Segment-level numbered-series reconciliation
+
+A case may contain one logical numbered salary list represented by multiple OCR
+layouts. The pipeline therefore parses pages/sections normally and treats the
+full-document `vertical-index-amount-series` result as an additional structured
+segment rather than an authoritative replacement for the whole case.
+
+`_reconcile_numbered_annual_series()` merges candidates by logical `Lekarz N`
+index. Structured segment rows win only inside the range they cover; rows from
+other parsers are retained outside that range. Reconciliation activates only
+when the combined candidates form a complete sequence from 1 through the end of
+the structured segment.
+

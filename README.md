@@ -354,3 +354,17 @@ poetry run fedrowanie-parser --help
 ## Licencja
 
 W repozytorium znajduje się placeholder `LICENSE`. Przed publikacją na GitHubie wybierz właściwą licencję dla projektu.
+
+### Segmentowe parsowanie numerowanych list
+
+Jedna odpowiedź może zmieniać layout pomiędzy stronami lub sekcjami. Parser nie
+zakłada więc, że cały dokument musi być obsługiwany przez jeden parser. Dla
+numerowanych list wynagrodzeń (`Lp. -> kwota`) rozpoznane segmenty są scalane
+po numerze pozycji. Silniejszy parser strukturalny może przejąć tylko zakres,
+który rozpoznał, a wcześniejsze lub późniejsze pozycje odzyskane przez inny
+parser pozostają zachowane.
+
+Przykładowo dokument może mieć pozycje `1-12` w układzie inline, a `13-97` w
+układzie pionowym. Wynikiem jest jedna logiczna sekwencja `1-97`, bez
+duplikowania tych samych numerów.
+
