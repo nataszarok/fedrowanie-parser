@@ -24,6 +24,8 @@ class SalaryRow:
     doctor_name: str = ''
     doctor_status: str = ''
     doctor_initials: str = ''
+    recipient_type: str = 'doctor'
+    recipient_name: str = ''
 
 @dataclass(frozen=True)
 class SourceCase:

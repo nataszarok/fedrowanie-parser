@@ -58,6 +58,8 @@ from .unit_column import (
     shifted_row_unit_candidate,
 )
 
+from .recipient import classify_salary_recipients
+
 __all__ = [
     "split_attachments",
     "contract_zones",
@@ -93,4 +95,5 @@ __all__ = [
     "inline_ocr_section_unit",
     "document_unit_index_amount_map",
     "shifted_row_unit_candidate",
+    "classify_salary_recipients",
 ]

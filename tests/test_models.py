@@ -24,4 +24,6 @@ def test_salary_row_uses_english_snake_case_fields():
         "doctor_name",
         "doctor_status",
         "doctor_initials",
+        "recipient_type",
+        "recipient_name",
     ]

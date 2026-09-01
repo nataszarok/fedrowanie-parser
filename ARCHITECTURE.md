@@ -169,3 +169,12 @@ other parsers are retained outside that range. Reconciliation activates only
 when the combined candidates form a complete sequence from 1 through the end of
 the structured segment.
 
+## Typ odbiorcy i podsumowania
+
+`SalaryRow` zachowuje wszystkie ujawnione kwoty, także gdy odbiorcą jest spółka.
+Pola `recipient_type` i `recipient_name` rozdzielają rekordy lekarzy od rekordów
+podmiotów zbiorczych. `salaries_summary` nie filtruje rekordów globalnym `WHERE`;
+zawiera metryki ogólne oraz osobne grupy `doctor_*` i `company_*`. Dzięki temu
+łączna wartość ujawnionych świadczeń pozostaje dostępna, a statystyki indywidualnych
+wynagrodzeń lekarzy nie obejmują kwot przypisanych spółkom.
+

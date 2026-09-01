@@ -13,7 +13,6 @@ from .constants import (
 from .services.case_extraction import validate_case_rows
 
 
-
 __all__ = [
     "extract_cases",
 ]
@@ -170,6 +169,7 @@ def _page_rows(case_pk, institution_pk, institution_name, page_no, page, doc, in
         plain = [r for r in plain if r.parser not in ('plain-inline', 'plain-index-amount', 'plain-vertical')]
     groups = (md, md_cont, named_inline, lekarz_inline, vertical_struct, gross_net_struct, parallel_idx, anon_inline, indexed_single, total_gross_cont, bracket_rows, embedded_list, amount_series, vertical_index_amounts, specialty_lines, role_named, named_table, two_section, annual_prose, body_lekarz, body_lp, parallel_lists, anon_amounts, annual_contract_lines, contract_practice_costs, forma_rows, single_anon_annual, named_colon_annual, vertical_pairs, vertical_named, ocr_contract, plain)
     return [row for group in groups for row in group]
+
 
 def _technical_filter(rows):
     """Parse or process the `_technical_filter` layout/stage."""
@@ -669,4 +669,5 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
             if ini:
                 r.doctor_initials=ini
 
+    final_rows = classify_salary_recipients(final_rows, doc)
     return validate_case_rows(final_rows)

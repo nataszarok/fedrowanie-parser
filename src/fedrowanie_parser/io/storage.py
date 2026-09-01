@@ -102,6 +102,8 @@ def write_extracted_rows(
             institution_pk INTEGER,
             institution_name TEXT,
             source_name TEXT,
+            recipient_type TEXT,
+            recipient_name TEXT,
             doctor_name TEXT,
             doctor_initials TEXT,
             specialization TEXT,
@@ -125,6 +127,8 @@ def write_extracted_rows(
             institution_pk,
             institution_name,
             source_name,
+            recipient_type,
+            recipient_name,
             doctor_name,
             doctor_initials,
             specialization,
@@ -139,7 +143,7 @@ def write_extracted_rows(
             raw_row,
             comment
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -147,6 +151,8 @@ def write_extracted_rows(
                 row.institution_pk,
                 row.institution_name,
                 row.source_name,
+                row.recipient_type,
+                row.recipient_name,
                 row.doctor_name,
                 row.doctor_initials,
                 row.specialization,
@@ -168,7 +174,7 @@ def write_extracted_rows(
 
 
 def write_summary(con: sqlite3.Connection) -> None:
-    """Rebuild the institution summary from `salaries_extracted`."""
+    """Rebuild institution totals with explicit doctor/company metric groups."""
     con.execute("DROP TABLE IF EXISTS salaries_summary")
     con.execute(
         """
@@ -176,35 +182,70 @@ def write_summary(con: sqlite3.Connection) -> None:
         SELECT
             institution_pk,
             institution_name,
+
             COUNT(*) AS record_count,
-            ROUND(
-                SUM(COALESCE(gross_compensation, net_compensation)),
-                2
-            ) AS total_compensation,
-            ROUND(
-                MAX(COALESCE(gross_compensation, net_compensation)),
-                2
-            ) AS max_compensation,
-            SUM(
-                CASE
-                    WHEN COALESCE(
-                        gross_compensation,
-                        net_compensation
-                    ) > 500000
-                    THEN 1
-                    ELSE 0
-                END
-            ) AS count_above_500k,
-            SUM(
-                CASE
-                    WHEN COALESCE(
-                        gross_compensation,
-                        net_compensation
-                    ) > 1000000
-                    THEN 1
-                    ELSE 0
-                END
-            ) AS count_above_1m
+            ROUND(SUM(COALESCE(gross_compensation, net_compensation)), 2)
+                AS total_compensation,
+            ROUND(MAX(COALESCE(gross_compensation, net_compensation)), 2)
+                AS max_compensation,
+            SUM(CASE
+                WHEN COALESCE(gross_compensation, net_compensation) > 500000
+                THEN 1 ELSE 0 END)
+                AS count_above_500k,
+            SUM(CASE
+                WHEN COALESCE(gross_compensation, net_compensation) > 1000000
+                THEN 1 ELSE 0 END)
+                AS count_above_1m,
+
+            SUM(CASE
+                WHEN recipient_type IN ('doctor', 'anonymous_doctor')
+                THEN 1 ELSE 0 END)
+                AS doctor_record_count,
+            ROUND(SUM(CASE
+                WHEN recipient_type IN ('doctor', 'anonymous_doctor')
+                THEN COALESCE(gross_compensation, net_compensation)
+                ELSE 0 END), 2)
+                AS doctor_total_compensation,
+            ROUND(MAX(CASE
+                WHEN recipient_type IN ('doctor', 'anonymous_doctor')
+                THEN COALESCE(gross_compensation, net_compensation)
+                ELSE NULL END), 2)
+                AS doctor_max_compensation,
+            SUM(CASE
+                WHEN recipient_type IN ('doctor', 'anonymous_doctor')
+                 AND COALESCE(gross_compensation, net_compensation) > 500000
+                THEN 1 ELSE 0 END)
+                AS doctor_count_above_500k,
+            SUM(CASE
+                WHEN recipient_type IN ('doctor', 'anonymous_doctor')
+                 AND COALESCE(gross_compensation, net_compensation) > 1000000
+                THEN 1 ELSE 0 END)
+                AS doctor_count_above_1m,
+
+            SUM(CASE
+                WHEN recipient_type = 'company'
+                THEN 1 ELSE 0 END)
+                AS company_record_count,
+            ROUND(SUM(CASE
+                WHEN recipient_type = 'company'
+                THEN COALESCE(gross_compensation, net_compensation)
+                ELSE 0 END), 2)
+                AS company_total_compensation,
+            ROUND(MAX(CASE
+                WHEN recipient_type = 'company'
+                THEN COALESCE(gross_compensation, net_compensation)
+                ELSE NULL END), 2)
+                AS company_max_compensation,
+            SUM(CASE
+                WHEN recipient_type = 'company'
+                 AND COALESCE(gross_compensation, net_compensation) > 500000
+                THEN 1 ELSE 0 END)
+                AS company_count_above_500k,
+            SUM(CASE
+                WHEN recipient_type = 'company'
+                 AND COALESCE(gross_compensation, net_compensation) > 1000000
+                THEN 1 ELSE 0 END)
+                AS company_count_above_1m
         FROM salaries_extracted
         GROUP BY institution_pk, institution_name
         ORDER BY total_compensation DESC

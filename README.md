@@ -368,3 +368,12 @@ Przykładowo dokument może mieć pozycje `1-12` w układzie inline, a `13-97` w
 układzie pionowym. Wynikiem jest jedna logiczna sekwencja `1-97`, bez
 duplikowania tych samych numerów.
 
+## Typ odbiorcy i podsumowania
+
+`SalaryRow` zachowuje wszystkie ujawnione kwoty, także gdy odbiorcą jest spółka.
+Pola `recipient_type` i `recipient_name` rozdzielają rekordy lekarzy od rekordów
+podmiotów zbiorczych. `salaries_summary` nie filtruje rekordów globalnym `WHERE`;
+zawiera metryki ogólne oraz osobne grupy `doctor_*` i `company_*`. Dzięki temu
+łączna wartość ujawnionych świadczeń pozostaje dostępna, a statystyki indywidualnych
+wynagrodzeń lekarzy nie obejmują kwot przypisanych spółkom.
+
