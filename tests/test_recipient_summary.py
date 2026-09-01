@@ -2,7 +2,7 @@ import sqlite3
 
 from fedrowanie_parser.io.storage import write_extracted_rows, write_summary
 from fedrowanie_parser.models import SalaryRow
-from fedrowanie_parser.pipeline import _classify_salary_recipients
+from fedrowanie_parser.enrichment.recipient import classify_salary_recipients
 
 
 def _row(source_name, amount, doctor_name=''):
@@ -18,7 +18,7 @@ def test_slawno_company_row_is_not_a_doctor():
     company = _row('Tomasz Bazar spółka (koordynator + 4 lekarzy)', 3668356.00)
     coordinator = _row('Tomasz Kasprzyk- koordynator', 969844.00, doctor_name='Tomasz Kasprzyk')
 
-    company, coordinator = _classify_salary_recipients([company, coordinator], '')
+    company, coordinator = classify_salary_recipients([company, coordinator], '')
 
     assert company.recipient_type == 'company'
     assert company.recipient_name == 'Tomasz Bazar spółka (koordynator + 4 lekarzy)'
@@ -30,7 +30,7 @@ def test_summary_keeps_all_totals_and_separates_doctors_and_companies():
     doctor = _row('Tomasz Kasprzyk- koordynator', 969844.00, doctor_name='Tomasz Kasprzyk')
     anonymous = _row('Lekarz specjalista', 741814.00)
     company = _row('Tomasz Bazar spółka (koordynator + 4 lekarzy)', 3668356.00)
-    rows = _classify_salary_recipients([doctor, anonymous, company], '')
+    rows = classify_salary_recipients([doctor, anonymous, company], '')
 
     con = sqlite3.connect(':memory:')
     write_extracted_rows(con, rows)

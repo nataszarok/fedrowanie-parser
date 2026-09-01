@@ -40,6 +40,7 @@ from .person_name import (
     looks_like_person_name,
     document_person_name_maps,
     infer_person_name,
+    enrich_person_names,
 )
 
 from .specialization import (
@@ -85,6 +86,7 @@ __all__ = [
     "looks_like_person_name",
     "document_person_name_maps",
     "infer_person_name",
+    "enrich_person_names",
     "infer_specialization_from_raw_row",
     "split_markdown_row",
     "is_separator_row",

@@ -630,24 +630,9 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
                 extra=inf[1]
                 r.comment=((r.comment or '').strip()+'; '+extra).strip('; ')
 
-    # Dedicated physician-name field. Prefer explicit table semantics, then
-    # conservative structured-row inference. Move exact historical false
-    # positives out of `specialization`.
-    if document_person_name_maps is not None or infer_person_name is not None:
-        raw_name_map, idx_name_map = document_person_name_maps(doc) if document_person_name_maps is not None else ({}, {})
-        for r in final_rows:
-            key=' | '.join(norm_space(x) for x in str(r.raw_row or '').strip().strip('|').split('|'))
-            person=raw_name_map.get(key,'')
-            rv=r.gross_compensation if r.gross_compensation is not None else r.net_compensation
-            m_idx=re.match(r'^\s*(\d+)\b', str(r.raw_row or ''))
-            if not person and m_idx and rv is not None:
-                person=idx_name_map.get((int(m_idx.group(1)), int(round(float(rv)*100))), '')
-            if not person and infer_person_name is not None:
-                person=infer_person_name(r.raw_row, r.specialization, r.organizational_unit)
-            if person:
-                r.doctor_name=person
-                if (r.specialization or '').strip() and norm_space(r.specialization).casefold()==norm_space(person).casefold():
-                    r.specialization=''
+    # Person identity extraction belongs to enrichment.person_name; the
+    # pipeline only orchestrates the enrichment step.
+    final_rows = enrich_person_names(final_rows, doc)
 
     if extract_status is not None:
         for r in final_rows:
