@@ -22,7 +22,7 @@ def test_slawno_company_row_is_not_a_doctor():
 
     assert company.recipient_type == 'company'
     assert company.recipient_name == 'Tomasz Bazar spółka (koordynator + 4 lekarzy)'
-    assert company.doctor_name == ''
+    assert company.doctor_name is None
     assert coordinator.recipient_type == 'doctor'
 
 

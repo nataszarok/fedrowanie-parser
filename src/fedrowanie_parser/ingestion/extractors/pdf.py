@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import fitz
+import pymupdf as fitz
 
 from ..models import CellTable
 from ..runtime import find_tesseract, tesseract_language

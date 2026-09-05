@@ -37,6 +37,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", required=True, type=Path)
     parser.add_argument("--source", action="append", default=[], metavar="FILE")
     parser.add_argument("--commit", action="store_true", help="perform inserts; default is dry-run")
+    parser.add_argument(
+        "--allow-existing-institution",
+        action="store_true",
+        help=(
+            "include staged institutions that already have rows in salaries_extracted; "
+            "by default such institutions are reported as SKIP and not inserted"
+        ),
+    )
     parser.add_argument("--rollback", metavar="FILE", help="rollback one active promotion")
     args = parser.parse_args(argv)
 
@@ -53,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
             con,
             dry_run=not args.commit,
             source_files=args.source or None,
+            allow_existing_institutions=args.allow_existing_institution,
         )
         _print_result(result, dry_run=not args.commit)
     finally:

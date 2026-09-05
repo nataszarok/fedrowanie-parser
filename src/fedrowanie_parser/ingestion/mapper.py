@@ -3,6 +3,7 @@ import re
 from .models import CellTable, IngestedSalary
 from .money import parse_money
 from ..enrichment.person_name import norm
+from ..enrichment.doctor_initials import normalize_initials
 from .person import person_from_source
 from .text_records import parse_salary_text_line
 
@@ -18,6 +19,20 @@ NUMERIC_ID_RE=re.compile(r'^\d{1,8}$')
 BAD_PERSON_RE=re.compile(r'(?i)\b(?:lekarz|specjalista|stanowisko|asystent|ordynator|rezydent|wynagrodzenie)\b')
 
 def _txt(x): return norm(x)
+
+_INITIALS_PAIR_RE = re.compile(r"(?i)^[A-ZĄĆĘŁŃÓŚŹŻ]\.?\s+[A-ZĄĆĘŁŃÓŚŹŻ]\.?$")
+_PLACEHOLDER_RE = re.compile(r"(?i)^x{2,}(?:\s+x{2,})+$")
+
+def _initials_from_source(value: str) -> str | None:
+    value=_txt(value)
+    if not value or _PLACEHOLDER_RE.fullmatch(value):
+        return None
+    if _INITIALS_PAIR_RE.fullmatch(value):
+        return normalize_initials(value)
+    compact=re.sub(r'\s+','',value)
+    if re.fullmatch(r'[A-ZĄĆĘŁŃÓŚŹŻ]\.?[A-ZĄĆĘŁŃÓŚŹŻ]\.?',compact,re.I):
+        return normalize_initials(compact)
+    return None
 
 def _is_numeric_cell(value):
     if isinstance(value,(int,float)) and not isinstance(value,bool): return True
@@ -94,7 +109,7 @@ def _line_rows(table, institution_name, institution_pk):
             doctor=person_from_source(source)
             out.append(IngestedSalary(
                 str(table.source_file),f"p.{table.page or 0}/line {ri}",institution_name,institution_pk,
-                source,doctor,"doctor" if doctor else "anonymous_doctor",
+                source,doctor or None,doctor_initials=_initials_from_source(source),recipient_type="doctor" if doctor else "anonymous_doctor",
                 net_compensation=net,gross_compensation=gross,raw_row=line,
                 parser='generic-numbered-text-list',
                 confidence='wysoka' if parsed.kind in {'gross','net'} else 'średnia',
@@ -131,7 +146,7 @@ def _line_rows(table, institution_name, institution_pk):
         if not source or source in {'za rok','rok'} or re.fullmatch(r'(?i)(?:w )?2025',source): continue
         if len(source)>160 or re.search(r'(?i)\b(?:telefon|regon|nip|kapitał|data|wniosek|pytania na temat)\b',source): continue
         doctor=person_from_source(source)
-        out.append(IngestedSalary(str(table.source_file),f"p.{table.page or 0}/line {ri}",institution_name,institution_pk,source,doctor,"doctor" if doctor else "anonymous_doctor",gross_compensation=amount,raw_row=line,parser='generic-pdf-line',confidence='średnia',comment='PDF/OCR text-line fallback; amount treated as gross/total unless source distinguishes otherwise'))
+        out.append(IngestedSalary(str(table.source_file),f"p.{table.page or 0}/line {ri}",institution_name,institution_pk,source,doctor or None,doctor_initials=_initials_from_source(source),recipient_type="doctor" if doctor else "anonymous_doctor",gross_compensation=amount,raw_row=line,parser='generic-pdf-line',confidence='średnia',comment='PDF/OCR text-line fallback; amount treated as gross/total unless source distinguishes otherwise'))
     return out
 
 def map_table(table: CellTable, institution_name: str, institution_pk: int|None) -> list[IngestedSalary]:
@@ -204,5 +219,5 @@ def map_table(table: CellTable, institution_name: str, institution_pk: int|None)
             # Unqualified salary columns are stored as gross/total to match existing schema convention.
             confidence='wysoka' if (GROSS_RE.search(h) or NET_RE.search(h) or YEAR_RE.search(h)) else 'średnia'
             anon=not doctor
-            out.append(IngestedSalary(str(table.source_file),f"{table.sheet}:row {ri}",institution_name,institution_pk,source,doctor,"doctor" if doctor else "anonymous_doctor",ct,net_compensation=net,gross_compensation=gross,raw_row=rowtext,parser=f"generic-{table.extractor}",confidence=confidence,comment=f"mapped from column: {h}"))
+            out.append(IngestedSalary(str(table.source_file),f"{table.sheet}:row {ri}",institution_name,institution_pk,source,doctor or None,doctor_initials=_initials_from_source(source),recipient_type="doctor" if doctor else "anonymous_doctor",contract_type=ct or None,net_compensation=net,gross_compensation=gross,raw_row=rowtext,parser=f"generic-{table.extractor}",confidence=confidence,comment=f"mapped from column: {h}"))
     return out

@@ -18,16 +18,26 @@ class IngestedSalary:
     institution_name: str
     institution_pk: int | None
     source_name: str
-    doctor_name: str = ""
+    doctor_name: str | None = None
     recipient_type: str = "anonymous_doctor"
-    contract_type: str = ""
-    specialization: str = ""
+    doctor_initials: str | None = None
+    contract_type: str | None = None
+    specialization: str | None = None
     net_compensation: float | None = None
     gross_compensation: float | None = None
     raw_row: str = ""
     parser: str = "generic-ingestion"
     confidence: str = "średnia"
-    comment: str = ""
+    comment: str | None = None
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "doctor_name", "doctor_initials", "contract_type",
+            "specialization", "comment",
+        ):
+            value = getattr(self, field_name)
+            if isinstance(value, str) and not value.strip():
+                setattr(self, field_name, None)
 
 @dataclass
 class DocumentIngestion:

@@ -45,8 +45,8 @@ def classify_salary_recipients(rows: list[SalaryRow], doc: str) -> list[SalaryRo
                     row.recipient_type = "company"
                     row.recipient_name = full_name
                     row.source_name = full_name
-                    row.doctor_name = ""
-                    row.doctor_initials = ""
+                    row.doctor_name = None
+                    row.doctor_initials = None
                     source = full_name
                     break
 
@@ -63,14 +63,16 @@ def classify_salary_recipients(rows: list[SalaryRow], doc: str) -> list[SalaryRo
         ):
             row.recipient_type = "company"
             row.recipient_name = source
-            row.doctor_name = ""
-            row.doctor_initials = ""
+            row.doctor_name = None
+            row.doctor_initials = None
 
         if getattr(row, "recipient_type", "") != "company":
-            row.recipient_type = (
-                "doctor" if (row.doctor_name or "").strip() else "anonymous_doctor"
-            )
-            row.recipient_name = (row.doctor_name or source).strip()
+            doctor_name = (row.doctor_name or "").strip()
+            row.recipient_type = "doctor" if doctor_name else "anonymous_doctor"
+            # ``source_name`` is provenance: it may legitimately contain labels
+            # such as "Lekarz 230" or "Anestezjolog".  Do not leak those labels
+            # into the semantic recipient field when no person was identified.
+            row.recipient_name = doctor_name or None
 
     return rows
 

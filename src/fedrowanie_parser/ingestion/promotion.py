@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..io.storage import ensure_salary_provenance_columns
+from ..enrichment.doctor_initials import normalize_initials
+from ..enrichment.person_name import looks_like_person_name, extract_person_name_from_source_label
+from .institution import normalize_name
 from .review import resolve_source_file
 from .storage import init_staging
 
@@ -71,6 +74,7 @@ def _fingerprint_rows(rows: list[sqlite3.Row]) -> str:
                 "institution_name": row["institution_name"],
                 "source_name": row["source_name"],
                 "doctor_name": row["doctor_name"],
+                "doctor_initials": row["doctor_initials"] if "doctor_initials" in row.keys() else None,
                 "recipient_type": row["recipient_type"],
                 "contract_type": row["contract_type"],
                 "specialization": row["specialization"],
@@ -86,7 +90,53 @@ def _fingerprint_rows(rows: list[sqlite3.Row]) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def _verify_document(con: sqlite3.Connection, doc: sqlite3.Row) -> PromotionPlan:
+def _existing_institution_match(
+    con: sqlite3.Connection,
+    institution_pk: int | None,
+    institution_name: str,
+) -> tuple[str, int] | None:
+    """Return an existing canonical institution and row count, if it already exists.
+
+    Prefer the stable institution_pk when available. Otherwise compare normalized names
+    exactly, so harmless differences in case, accents, whitespace, and punctuation do not
+    hide a duplicate while avoiding fuzzy false positives.
+    """
+    if institution_pk is not None:
+        row = con.execute(
+            """
+            SELECT MIN(institution_name), COUNT(*)
+            FROM salaries_extracted
+            WHERE institution_pk = ?
+            HAVING COUNT(*) > 0
+            """,
+            (institution_pk,),
+        ).fetchone()
+        if row:
+            return str(row[0] or institution_name), int(row[1] or 0)
+
+    wanted = normalize_name(institution_name)
+    if not wanted:
+        return None
+    rows = con.execute(
+        """
+        SELECT institution_name, COUNT(*)
+        FROM salaries_extracted
+        WHERE COALESCE(institution_name, '') <> ''
+        GROUP BY institution_name
+        """
+    ).fetchall()
+    for existing_name, count in rows:
+        if normalize_name(existing_name) == wanted:
+            return str(existing_name), int(count or 0)
+    return None
+
+
+def _verify_document(
+    con: sqlite3.Connection,
+    doc: sqlite3.Row,
+    *,
+    allow_existing_institutions: bool = False,
+) -> PromotionPlan:
     rows = _rows_for_document(con, doc["source_file"])
     actual_count = len(rows)
     actual_gross = round(sum(float(row["gross_compensation"] or 0.0) for row in rows), 2)
@@ -119,16 +169,38 @@ def _verify_document(con: sqlite3.Connection, doc: sqlite3.Row) -> PromotionPlan
             )
         errors.append("an older version of this source is already promoted; rollback it first")
 
-    action = "BLOCK" if errors else "INSERT"
+    existing = None
+    if not allow_existing_institutions:
+        existing = _existing_institution_match(
+            con, doc["institution_pk"], doc["institution_name"]
+        )
+
+    if errors:
+        return PromotionPlan(
+            doc["source_file"], doc["institution_name"], actual_count, actual_gross,
+            fingerprint, "BLOCK", "; ".join(errors),
+        )
+
+    if existing:
+        existing_name, existing_rows = existing
+        return PromotionPlan(
+            doc["source_file"], doc["institution_name"], actual_count, actual_gross,
+            fingerprint, "SKIP",
+            "institution already exists in salaries_extracted: "
+            f"{existing_name!r} ({existing_rows} existing rows)",
+        )
+
     return PromotionPlan(
         doc["source_file"], doc["institution_name"], actual_count, actual_gross,
-        fingerprint, action, "; ".join(errors),
+        fingerprint, "INSERT", "",
     )
 
 
 def build_promotion_plan(
     con: sqlite3.Connection,
     source_files: list[str] | None = None,
+    *,
+    allow_existing_institutions: bool = False,
 ) -> list[PromotionPlan]:
     """Verify approved staging documents and return an insert/skip/block plan."""
     init_staging(con)
@@ -151,7 +223,12 @@ def build_promotion_plan(
             params,
         )
     )
-    return [_verify_document(con, doc) for doc in docs]
+    return [
+        _verify_document(
+            con, doc, allow_existing_institutions=allow_existing_institutions
+        )
+        for doc in docs
+    ]
 
 
 def _page_number(locator: str) -> int | None:
@@ -184,8 +261,32 @@ def _insert_document(
     for row in rows:
         source_name = (row["source_name"] or "").strip()
         doctor_name = (row["doctor_name"] or "").strip()
+        doctor_initials = (row["doctor_initials"] or "").strip() if "doctor_initials" in row.keys() else ""
+        # Staging may contain rows produced by older parser versions. Never
+        # promote anonymisation placeholders/initials as a semantic full name.
+        if doctor_name and not looks_like_person_name(doctor_name):
+            compact = re.sub(r"\s+", "", doctor_name)
+            if re.fullmatch(r"[A-ZĄĆĘŁŃÓŚŹŻ]\.?[A-ZĄĆĘŁŃÓŚŹŻ]\.?", compact, re.I):
+                doctor_initials = normalize_initials(compact)
+            recovered = extract_person_name_from_source_label(doctor_name)
+            doctor_name = recovered if recovered and looks_like_person_name(recovered) else None
+        if not doctor_initials:
+            compact = re.sub(r"\s+", "", source_name)
+            if not re.fullmatch(r"(?i)x{2,}x{2,}", compact) and re.fullmatch(r"[A-ZĄĆĘŁŃÓŚŹŻ]\.?[A-ZĄĆĘŁŃÓŚŹŻ]\.?", compact, re.I):
+                doctor_initials = normalize_initials(compact)
+        doctor_name = doctor_name or None
+        doctor_initials = doctor_initials or None
         recipient_type = (row["recipient_type"] or "anonymous_doctor").strip()
-        recipient_name = doctor_name or source_name
+        if recipient_type == "company":
+            recipient_name = source_name
+            doctor_name = None
+            doctor_initials = None
+        elif doctor_name:
+            recipient_type = "doctor"
+            recipient_name = doctor_name
+        else:
+            recipient_type = "anonymous_doctor"
+            recipient_name = None
         con.execute(
             """
             INSERT INTO salaries_extracted (
@@ -196,13 +297,13 @@ def _insert_document(
                 confidence, raw_row, comment, ingestion_source_file,
                 ingestion_source_locator, ingestion_fingerprint, ingestion_promotion_id
             ) VALUES (
-                NULL, ?, ?, ?, ?, ?, ?, '', ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
                 row["institution_pk"], row["institution_name"], source_name,
-                recipient_type, recipient_name, doctor_name,
-                row["specialization"] or "", row["contract_type"] or "",
+                recipient_type, recipient_name, doctor_name, doctor_initials,
+                row["specialization"] or None, row["contract_type"] or None,
                 row["net_compensation"], row["gross_compensation"],
                 _page_number(row["source_locator"]), row["parser"], row["confidence"],
                 row["raw_row"], row["comment"], plan.source_file,
@@ -243,9 +344,14 @@ def promote_approved(
     *,
     dry_run: bool = True,
     source_files: list[str] | None = None,
+    allow_existing_institutions: bool = False,
 ) -> dict[str, object]:
     """Promote approved documents, one atomic transaction per source document."""
-    plans = build_promotion_plan(con, source_files)
+    plans = build_promotion_plan(
+        con,
+        source_files,
+        allow_existing_institutions=allow_existing_institutions,
+    )
     before_count, before_gross = _canonical_totals(con)
     inserted_count = 0
     inserted_gross = 0.0

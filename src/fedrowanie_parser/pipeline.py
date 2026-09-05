@@ -17,6 +17,7 @@ __all__ = [
     "extract_cases",
 ]
 
+
 # Public package APIs are intentionally imported wholesale; each module defines __all__.
 from .processing.api import *
 from .processing.case_flags import classify_case_flags
@@ -102,6 +103,70 @@ def extract_cases(cases: list[SourceCase]) -> ExtractionResult:
         )
 
     return ExtractionResult(rows=accepted, statuses=statuses)
+
+
+def _append_comment(existing: str | None, extra: str | None) -> str | None:
+    """Append comment fragments without treating missing text as a string.
+
+    This is the single boundary for comment concatenation in the pipeline.
+    ``None`` represents no comment; separators are added only between actual
+    fragments.
+    """
+    parts = [
+        part.strip("; ")
+        for part in (existing, extra)
+        if isinstance(part, str) and part.strip("; ")
+    ]
+    return "; ".join(parts) or None
+
+
+def _rebuild_section_salary_rows(
+    case_pk: int,
+    institution_pk: int | None,
+    institution_name: str,
+    final_rows: list[SalaryRow],
+    sec_items,
+) -> list[SalaryRow]:
+    """Rebuild rows from a structured section list while preserving metadata."""
+    pools: dict[float, list[SalaryRow]] = {}
+    for row in final_rows:
+        value = (
+            row.gross_compensation
+            if row.gross_compensation is not None
+            else row.net_compensation
+        )
+        if value is None:
+            continue
+        pools.setdefault(round(float(value), 2), []).append(row)
+
+    rebuilt: list[SalaryRow] = []
+    for item in sec_items:
+        old = None
+        pool = pools.get(round(float(item.amount), 2), [])
+        if pool:
+            old = pool.pop(0)
+        rebuilt.append(
+            SalaryRow(
+                case_pk,
+                institution_pk,
+                institution_name,
+                f"Lekarz {item.index}",
+                None,
+                old.contract_type if old is not None else None,
+                None,
+                item.amount,
+                old.page_number if old is not None else 0,
+                "section-salary-list",
+                "wysoka",
+                item.raw_row,
+                _append_comment(
+                    old.comment if old is not None else None,
+                    "rekord z sekcyjnej listy wynagrodzeń",
+                ),
+                item.unit,
+            )
+        )
+    return rebuilt
 
 
 def _page_rows(case_pk, institution_pk, institution_name, page_no, page, doc, inherited_contract, inherited_kind, inherited_spec):
@@ -456,7 +521,7 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
                             proto.source_name, proto.specialization, ct, None, amount,
                             proto.page_number, 'markdown-multi-contract-reconcile',
                             'wysoka', proto.raw_row,
-                            (proto.comment or '') + '; odzyskano brakującą niepustą kolumnę typu umowy'
+                            _append_comment(proto.comment, 'odzyskano brakującą niepustą kolumnę typu umowy')
                         ))
             final_rows.extend(additions)
 
@@ -470,7 +535,7 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
             if inf:
                 r.contract_type=inf[0]
                 extra=f"typ umowy z semantyki rekordu/sekcji: {inf[1]}"
-                r.comment=((r.comment or '').strip()+'; '+extra).strip('; ')
+                r.comment=_append_comment(r.comment, extra)
 
     # Recover missing contract type from the exact attachment/local section that
     # contains this row. Existing row-level contract values always win.
@@ -494,7 +559,7 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
                     f"typ umowy z kontekstu załącznika: {m['filename']} "
                     f"({m['source']}; {m['evidence']}; match={m['match_reasons']})"
                 )
-                r.comment=((r.comment or '').strip()+'; '+extra).strip('; ')
+                r.comment=_append_comment(r.comment, extra)
     # Replace a weaker generic extraction with a structured section-list parse
     # when the source is clearly of the form:
     #   Oddział X:
@@ -517,36 +582,9 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
             # existing rows and produce at least as many records.
             if len(sec_items)>=len(final_rows) and overlap>=max(10,int(0.85*len(final_rows))):
                 # Reuse metadata from matching old rows where possible.
-                pools={}
-                for r in final_rows:
-                    v=r.gross_compensation if r.gross_compensation is not None else r.net_compensation
-                    if v is None:
-                        continue
-                    pools.setdefault(round(float(v),2),[]).append(r)
-                rebuilt=[]
-                for x in sec_items:
-                    old=None
-                    pool=pools.get(round(float(x.amount),2),[])
-                    if pool:
-                        old=pool.pop(0)
-                    rebuilt.append(SalaryRow(
-                        case_pk,
-                        institution_pk,
-                        institution_name,
-                        f'Lekarz {x.index}',
-                        '',
-                        old.contract_type if old is not None else '',
-                        None,
-                        x.amount,
-                        old.page_number if old is not None else 0,
-                        'section-salary-list',
-                        'wysoka',
-                        x.raw_row,
-                        ((old.comment if old is not None else '') +
-                         '; rekord z sekcyjnej listy wynagrodzeń').strip('; '),
-                        x.unit,
-                    ))
-                final_rows=rebuilt
+                final_rows = _rebuild_section_salary_rows(
+                    case_pk, institution_pk, institution_name, final_rows, sec_items
+                )
 
     # Separate organizational unit/ward from medical specialization.
     # Existing combined values such as "ODDZIAŁ ... — Lekarz specjalista"
@@ -617,7 +655,7 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
                 and norm_space(r.organizational_unit).casefold()
                     == norm_space(r.specialization).casefold()
             ):
-                r.specialization=''
+                r.specialization=None
 
     # Recover missing medical specialization from the record itself.
     if infer_specialization_from_raw_row is not None:
@@ -628,7 +666,7 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
             if inf:
                 r.specialization=inf[0]
                 extra=inf[1]
-                r.comment=((r.comment or '').strip()+'; '+extra).strip('; ')
+                r.comment=_append_comment(r.comment, extra)
 
     # Person identity extraction belongs to enrichment.person_name; the
     # pipeline only orchestrates the enrichment step.
@@ -640,7 +678,7 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
             if status:
                 r.doctor_status = status
             if clear_spec:
-                r.specialization = ''
+                r.specialization = None
 
     # Recover anonymised initials / physician identifiers into a dedicated
     # field, separate from full person names.
@@ -655,4 +693,9 @@ def _case_rows(case_pk, institution_pk, institution_name, doc):
                 r.doctor_initials=ini
 
     final_rows = classify_salary_recipients(final_rows, doc)
+    # Enrichment mutates rows after dataclass construction. Re-canonicalize
+    # optional text at the public pipeline boundary so callers never receive
+    # blank strings as missing values.
+    for row in final_rows:
+        row.normalize_missing_text()
     return validate_case_rows(final_rows)

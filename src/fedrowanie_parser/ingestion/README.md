@@ -89,6 +89,7 @@ Promotion verifies, per source document:
 - staging gross sum equals `ingestion_documents.gross_sum`,
 - staging fingerprint is unchanged since review,
 - the same source has not already been promoted,
+- the staged institution does not already have rows in `salaries_extracted`,
 - the canonical insert changes row count and compensation sum by exactly the expected values.
 
 ## 4. Commit approved documents
@@ -97,6 +98,17 @@ Promotion verifies, per source document:
 fedrowanie-promote \
   --db fedrowanie_wynagrodzenia_2025.db \
   --commit
+```
+
+Before `--commit`, promotion also checks whether the staged institution already exists in `salaries_extracted`. A match by `institution_pk`, or by an exactly normalized institution name when no PK is available, is shown as `BLOCK` and the commit exits without inserting anything. This protects against accidentally importing the same hospital/facility twice.
+
+If you reviewed the collision and intentionally want to append another document for an institution that already exists, opt in explicitly:
+
+```bash
+fedrowanie-promote \
+  --db fedrowanie_wynagrodzenia_2025.db \
+  --commit \
+  --allow-existing-institution
 ```
 
 Each source document is promoted in its own atomic transaction. Promotion adds provenance columns to `salaries_extracted` when needed:

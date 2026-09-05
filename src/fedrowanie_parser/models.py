@@ -11,21 +11,40 @@ class SalaryRow:
     institution_pk: Optional[int]
     institution_name: str
     source_name: str
-    specialization: str
-    contract_type: str
+    specialization: Optional[str]
+    contract_type: Optional[str]
     net_compensation: Optional[float]
     gross_compensation: Optional[float]
     page_number: Optional[int]
     parser: str
     confidence: str
     raw_row: str
-    comment: str = ''
-    organizational_unit: str = ''
-    doctor_name: str = ''
-    doctor_status: str = ''
-    doctor_initials: str = ''
+    comment: Optional[str] = None
+    organizational_unit: Optional[str] = None
+    doctor_name: Optional[str] = None
+    doctor_status: Optional[str] = None
+    doctor_initials: Optional[str] = None
     recipient_type: str = 'doctor'
-    recipient_name: str = ''
+    recipient_name: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        self.normalize_missing_text()
+
+    def normalize_missing_text(self) -> None:
+        """Canonicalize blank optional text fields to ``None``.
+
+        Enrichment mutates ``SalaryRow`` instances after construction, so this
+        method is also called at pipeline/storage boundaries to keep the public
+        data model consistent.
+        """
+        for field_name in (
+            "specialization", "contract_type", "comment",
+            "organizational_unit", "doctor_name", "doctor_status",
+            "doctor_initials", "recipient_name",
+        ):
+            value = getattr(self, field_name)
+            if isinstance(value, str) and not value.strip():
+                setattr(self, field_name, None)
 
 @dataclass(frozen=True)
 class SourceCase:

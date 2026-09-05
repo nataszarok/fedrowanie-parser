@@ -45,6 +45,7 @@ def init_staging(con: sqlite3.Connection) -> None:
             institution_pk INTEGER,
             source_name TEXT,
             doctor_name TEXT,
+            doctor_initials TEXT,
             recipient_type TEXT,
             contract_type TEXT,
             specialization TEXT,
@@ -92,6 +93,15 @@ def init_staging(con: sqlite3.Connection) -> None:
             "promotion_id": "INTEGER",
         },
     )
+    _ensure_columns(con, "ingestion_rows", {"doctor_initials": "TEXT"})
+    for column in (
+        "doctor_name", "doctor_initials", "contract_type",
+        "specialization", "comment",
+    ):
+        con.execute(
+            f"UPDATE ingestion_rows SET {column}=NULL "
+            f"WHERE {column} IS NOT NULL AND TRIM({column})=''"
+        )
     con.execute(
         "UPDATE ingestion_documents SET review_status='PENDING' WHERE review_status IS NULL OR review_status=''"
     )
@@ -118,6 +128,7 @@ def staging_fingerprint(document: DocumentIngestion) -> str:
             "institution_name": row.institution_name,
             "source_name": row.source_name,
             "doctor_name": row.doctor_name,
+            "doctor_initials": row.doctor_initials,
             "recipient_type": row.recipient_type,
             "contract_type": row.contract_type,
             "specialization": row.specialization,
@@ -194,10 +205,10 @@ def replace_document(con: sqlite3.Connection, document: DocumentIngestion) -> No
         """
         INSERT INTO ingestion_rows (
             source_file, source_locator, institution_name, institution_pk,
-            source_name, doctor_name, recipient_type, contract_type,
+            source_name, doctor_name, doctor_initials, recipient_type, contract_type,
             specialization, net_compensation, gross_compensation, raw_row,
             parser, confidence, comment
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -206,16 +217,17 @@ def replace_document(con: sqlite3.Connection, document: DocumentIngestion) -> No
                 row.institution_name,
                 row.institution_pk,
                 row.source_name,
-                row.doctor_name,
+                row.doctor_name or None,
+                row.doctor_initials or None,
                 row.recipient_type,
-                row.contract_type,
-                row.specialization,
+                row.contract_type or None,
+                row.specialization or None,
                 row.net_compensation,
                 row.gross_compensation,
                 row.raw_row,
                 row.parser,
                 row.confidence,
-                row.comment,
+                row.comment or None,
             )
             for row in document.rows
         ],
