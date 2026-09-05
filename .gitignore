@@ -25,3 +25,7 @@ output/*
 dist/
 build/
 *.egg-info/
+
+# Files from watchdog
+.watch_dog/
+ingestion_report.md

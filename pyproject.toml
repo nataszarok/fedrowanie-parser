@@ -8,12 +8,19 @@ packages = [{ include = "fedrowanie_parser", from = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4.0"
+openpyxl = ">=3.1"
+python-docx = ">=1.1"
+odfpy = ">=1.4"
+PyMuPDF = ">=1.24"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
 
 [tool.poetry.scripts]
 fedrowanie-parser = "fedrowanie_parser.cli:main"
+fedrowanie-ingest = "fedrowanie_parser.ingestion.cli:main"
+fedrowanie-review = "fedrowanie_parser.ingestion.cli_review:main"
+fedrowanie-promote = "fedrowanie_parser.ingestion.cli_promote:main"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]

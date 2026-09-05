@@ -14,6 +14,7 @@ __all__ = [
     "write_cases_status_csv",
     "write_extracted_csv",
     "write_summary_csv",
+    "ensure_salary_provenance_columns",
 ]
 
 
@@ -116,7 +117,11 @@ def write_extracted_rows(
             parser TEXT,
             confidence TEXT,
             raw_row TEXT,
-            comment TEXT
+            comment TEXT,
+            ingestion_source_file TEXT,
+            ingestion_source_locator TEXT,
+            ingestion_fingerprint TEXT,
+            ingestion_promotion_id INTEGER
         )
         """
     )
@@ -169,6 +174,31 @@ def write_extracted_rows(
             )
             for row in rows
         ],
+    )
+    con.commit()
+
+
+
+def ensure_salary_provenance_columns(con: sqlite3.Connection) -> None:
+    """Ensure canonical salary storage can track reversible ingestion provenance."""
+    table = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='salaries_extracted'"
+    ).fetchone()
+    if table is None:
+        raise RuntimeError("salaries_extracted does not exist; run the canonical parser first")
+    columns = {row[1] for row in con.execute("PRAGMA table_info(salaries_extracted)")}
+    wanted = {
+        "ingestion_source_file": "TEXT",
+        "ingestion_source_locator": "TEXT",
+        "ingestion_fingerprint": "TEXT",
+        "ingestion_promotion_id": "INTEGER",
+    }
+    for name, sql_type in wanted.items():
+        if name not in columns:
+            con.execute(f"ALTER TABLE salaries_extracted ADD COLUMN {name} {sql_type}")
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_salaries_ingestion_promotion "
+        "ON salaries_extracted(ingestion_promotion_id)"
     )
     con.commit()
 
